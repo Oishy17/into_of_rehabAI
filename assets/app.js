@@ -13,6 +13,15 @@
     const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
     const FS = 'Frozen shoulder';
     const EF = window.ExerciseFigures;
+    /* why-sim.js (the "why it's prescribed" simulation) loads from the same folder as this file,
+       so index.html does not need a new <script> tag */
+    const BASE = ((document.currentScript && document.currentScript.src) || '').replace(/[^/]*$/, '');
+    function needSim(cb) {
+        if (window.WhySim) { cb(); return; }
+        let s = document.getElementById('whysim-js');
+        if (!s) { s = document.createElement('script'); s.id = 'whysim-js'; s.src = BASE + 'why-sim.js'; document.head.appendChild(s); }
+        s.addEventListener('load', cb);
+    }
 
     const I = {
         do: '<svg width="12" height="12" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="#fff"/></svg>',
@@ -24,6 +33,9 @@
         pause: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
         play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"/></svg>',
         x: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+        rx: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M8 10.5h5M10.5 8v5"/></svg>',
+        arrow: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+        replay: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 103-6.7L3 8M3 3v5h5"/></svg>',
         ok: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
     };
     const CAT_ICON = {
@@ -141,6 +153,120 @@
         if (e.gauge === 'pain') return '<div class="gauge"><span class="sub">Example</span>' + L('Lift arm', 25, 'var(--why)', 'painful') + L('Relaxed swing', 85, 'var(--ok)', 'ok') + '</div>';
         return '<div class="gauge"><span class="sub">Strength · example</span>' + L('Typical', 100, 'var(--ok)', '100%') + L('Weak', 50, 'var(--why)', '≈50%') + '</div>';
     }
+    /* ======================================================================
+       WHY IT'S PRESCRIBED — condition → inside the body → exercise → result,
+       with an "inside the body" simulation and a weeks-of-practice timeline
+       ==================================================================== */
+    const WEEKS = 12;
+    /** Related conditions for an exercise: the document's list (CLIN), each linked to a simulation (DZ). */
+    function relOf(e) {
+        const cl = (window.CLIN || {})[e.id];
+        if (cl) return cl.related.map(r => { const p = r.split('='); return { name: p[0], dz: p[1] || p[0] }; }).filter(c => DZ[c.dz]);
+        return e.for.filter(f => DZ[f]).map(f => ({ name: f, dz: f }));
+    }
+    function whyPanel(e) {
+        const a = (window.ACT || {})[e.id];
+        if (!a || !window.DZ) return '';
+        const cl = (window.CLIN || {})[e.id], conds = relOf(e);
+        const cons = cl ? (window.CONSIDER || []).filter(c => cl.related.some(r => c.re.test(r))) : [];
+        return '<section class="panel p-rx" id="why" aria-label="Why your physio prescribed it">' +
+            '<div class="rx-head"><h2><span class="ic">' + I.rx + '</span>Why your physio prescribed it</h2>' +
+                '<span class="rx-lead">Tap a related condition to see what goes wrong inside the ' + esc(a.joint) + ' — and how this exercise helps.</span></div>' +
+            (cl ? '<div class="rx-reason"><span class="ic">' + I.why + '</span><div><small>Clinical reason</small><b>' + esc(cl.reason) + '</b></div></div>' : '') +
+            '<div class="rx-related"><small>Related conditions</small><div class="rx-conds" role="group" aria-label="Related conditions">' + conds.map((c, k) =>
+                '<button type="button" class="rx-cond' + (/frozen/i.test(c.name) ? ' fs' : '') + '" data-k="' + k + '" aria-pressed="' + (k === 0) + '">' + esc(c.name) + '</button>').join('') + '</div></div>' +
+            '<div class="rx-grid">' +
+                '<div class="rx-sim"><span class="rx-tag" id="rxTag"></span><div class="rx-fig" id="rxFig"></div>' +
+                    '<div class="rx-ctl"><button class="pill" id="rxPlay" type="button">' + I.play + ' Simulate recovery</button>' +
+                    '<label class="rx-week"><span class="rx-wk" id="rxWk">Before</span>' +
+                    '<input type="range" id="rxW" min="0" max="' + WEEKS + '" step="0.1" value="0" aria-label="Weeks of regular practice"></label></div></div>' +
+                '<ol class="rx-chain">' +
+                    '<li class="c1"><i>1</i><div><small>Related condition</small><b id="rxDz"></b><span id="rxWhat"></span></div></li>' +
+                    '<li class="c2"><i>2</i><div><small>What goes wrong inside</small><span id="rxIn"></span></div></li>' +
+                    '<li class="c3"><i>3</i><div><small>What this exercise does</small><span>' + esc(a.act) + '</span><em id="rxFix"></em></div></li>' +
+                    '<li class="c4"><i>4</i><div><small>Result with regular practice</small><b>' + esc(e.goal) + '</b><div class="rx-meter" id="rxMeter"></div></div></li>' +
+                '</ol>' +
+            '</div>' +
+            (cons.length ? '<div class="rx-cons"><small>Clinical considerations</small><div class="rx-cons-grid">' + cons.map(c =>
+                '<div><b>' + esc(c.t) + '</b><span>' + esc(c.r) + '</span></div>').join('') + '</div></div>' : '') +
+            '<p class="rx-note"><b>Important:</b> ' + esc(window.CLIN_NOTE || '') + ' The simulation is simplified and its timeline is an example.</p>' +
+            '</section>';
+    }
+    function startWhy(e) {
+        const host = $('#rxFig');
+        if (!host) return;
+        const a = ACT[e.id], conds = relOf(e);
+        const range = $('#rxW'), wk = $('#rxWk'), play = $('#rxPlay'), meter = $('#rxMeter');
+        let cond = conds[0], wv = 0, anim = null, sim = null, last = 0;
+        function meterHtml(w) {
+            const W = w * w * (3 - 2 * w);
+            const L = (name, pct, col, v) => '<div class="gline"><span>' + name + '</span><span class="tr"><i style="width:' + Math.round(pct) + '%;background:' + col + '"></i></span><span class="v">' + v + '</span></div>';
+            if (Array.isArray(e.gauge)) {
+                const n = e.gauge[0], r = e.gauge[1], now = r + (n - r) * W;
+                return L('Before', r / n * 100, 'var(--why)', r + '°') + L(w > 0 ? 'Week ' + Math.round(w * WEEKS) : 'Now', now / n * 100, 'var(--ok)', Math.round(now) + '°');
+            }
+            if (e.gauge === 'pain') {
+                const p0 = 8, p = Math.round(8 - 6 * W);
+                return L('Pain before', p0 * 10, 'var(--why)', p0 + '/10') + L(w > 0 ? 'Week ' + Math.round(w * WEEKS) : 'Now', p * 10, 'var(--ok)', p + '/10');
+            }
+            const s = Math.round(50 + 45 * W);
+            return L('Strength before', 50, 'var(--why)', '≈50%') + L(w > 0 ? 'Week ' + Math.round(w * WEEKS) : 'Now', s, 'var(--ok)', '≈' + s + '%');
+        }
+        function setW(v, fromInput) {
+            wv = Math.max(0, Math.min(WEEKS, v));
+            if (!fromInput) range.value = wv;
+            range.style.setProperty('--p', (wv / WEEKS * 100) + '%');
+            wk.textContent = wv < 0.05 ? 'Before' : 'Week ' + Math.max(1, Math.round(wv));
+            meter.innerHTML = meterHtml(wv / WEEKS);
+        }
+        function setCond(c) {
+            cond = c;
+            const d = DZ[c.dz], mech = WhySim.MECH[d.m] || {};
+            $('#rxDz').textContent = c.name;
+            $('#rxWhat').textContent = d.what;
+            $('#rxIn').textContent = d.inside;
+            $('#rxFix').textContent = mech.fix || '';
+            $('#rxTag').textContent = 'Inside the ' + a.joint + ' · ' + (mech.title || '');
+            document.querySelectorAll('.rx-cond').forEach(b => b.setAttribute('aria-pressed', String(conds[+b.getAttribute('data-k')] === c)));
+        }
+        function frame(t) {
+            if (anim) {
+                const p = Math.min(1, (t - anim.t0) / anim.dur);
+                setW(anim.from + (WEEKS - anim.from) * p);
+                if (p >= 1) { anim = null; play.innerHTML = I.replay + ' Replay recovery'; }
+            }
+            sim.draw(DZ[cond.dz].m, { t: t, m: reduce ? 1 : WhySim.motion(t), w: wv / WEEKS, k: e.pb.k, moving: !reduce });
+        }
+        needSim(function () {
+            if (!host.isConnected) return;   /* page changed while the file was loading */
+            sim = WhySim.mount(host);
+            setCond(cond); setW(0);
+            frame(reduce ? 1.6 : 0);
+            rx = { step: t => { if (rx.vis !== false && t - last > 0.03) { last = t; frame(t); } } };
+            if ('IntersectionObserver' in window) {
+                const ob = new IntersectionObserver(en => en.forEach(x => { rx.vis = x.isIntersecting; }), { rootMargin: '40px' });
+                ob.observe(host); rx.ob = ob;
+            }
+        });
+        document.querySelectorAll('.rx-cond').forEach(b => b.addEventListener('click', function () {
+            setCond(conds[+this.getAttribute('data-k')]);
+            if (sim) frame(performance.now() / 1000);
+        }));
+        range.addEventListener('input', function () {
+            anim = null; play.innerHTML = I.play + ' Simulate recovery';
+            setW(+this.value, true);
+            if (sim && reduce) frame(1.6);
+        });
+        play.addEventListener('click', function () {
+            const now = performance.now() / 1000;
+            if (anim) { anim = null; this.innerHTML = I.play + ' Simulate recovery'; return; }
+            const from = wv >= WEEKS - 0.05 ? 0 : wv;
+            if (reduce) { setW(WEEKS); if (sim) frame(1.6); this.innerHTML = I.replay + ' Replay recovery'; return; }
+            anim = { t0: now, from: from, dur: 9 * (1 - from / WEEKS) + 0.5 };
+            this.innerHTML = I.pause + ' Pause';
+        });
+    }
+
     function page(e) {
         const i = EXS.indexOf(e), prev = EXS[(i + EXS.length - 1) % EXS.length], next = EXS[(i + 1) % EXS.length];
         const u = U(e), c = catOf(e.cat);
@@ -180,6 +306,7 @@
                     e.frames.map((f, k) => '<figure><div class="fp"><div class="fig" id="fr' + k + '"></div></div><figcaption><i>' + (k + 1) + '</i>' + esc(f) + '</figcaption></figure>').join('') +
                 '</div></section>' +
             '</div>' +
+            whyPanel(e) +
             '<nav class="pager" aria-label="More exercises"><a href="#ex-' + prev.slug + '">‹ ' + esc(prev.name) + '</a><a href="#ex-' + next.slug + '">' + esc(next.name) + ' ›</a></nav>' +
             '</article>';
     }
@@ -187,7 +314,7 @@
     /* ======================================================================
        ANIMATION LOOP — only figures on screen are animated
        ==================================================================== */
-    let items = [], io = null, stage = null, lastT = 0;
+    let items = [], io = null, stage = null, rx = null, lastT = 0;
     function watch(list) {
         if (!('IntersectionObserver' in window)) { list.forEach(x => x.vis = true); return; }
         io = new IntersectionObserver(en => en.forEach(x => { const it = list.filter(k => k.host === x.target)[0]; if (it) it.vis = x.isIntersecting; }), { rootMargin: '60px' });
@@ -218,6 +345,7 @@
         lastT = now;
         if (cardFrame) items.forEach(it => { if (it.vis) paintNormal(it.fig, it.e, normalAt(it.e, t + it.off), false); });
         if (stage) stage.step(t);
+        if (rx) rx.step(t);
     }
 
     function startDetail(e) {
@@ -264,6 +392,7 @@
             const f = mountFig($('#fr' + k), e, k > 0);
             f.set({ theta: q[0], dir: info.dirs[0], target: k === 2 ? e.rule.c : null, arrow: q[1], labels: k === 2 });
         });
+        startWhy(e);
     }
 
     /* ======================================================================
@@ -271,7 +400,8 @@
        ==================================================================== */
     function render() {
         if (io) io.disconnect();
-        io = null; items = []; stage = null;
+        if (rx && rx.ob) rx.ob.disconnect();
+        io = null; items = []; stage = null; rx = null;
         const h = location.hash.replace('#', '');
         const view = $('#view');
         const e = h.indexOf('ex-') === 0 ? EXS.filter(x => x.slug === h.slice(3))[0] : null;
@@ -289,6 +419,7 @@
         }
     }
     document.addEventListener('DOMContentLoaded', function () {
+        needSim(function () {});   /* preload the simulation */
         $('#jump').innerHTML = CATS.map(c => '<a href="#' + c.id + '"><i style="background:' + cvar(c.id) + '"></i>' + esc(c.name) + '</a>').join('');
         window.addEventListener('hashchange', render);
         render();

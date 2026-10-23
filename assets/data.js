@@ -145,4 +145,132 @@
           pb: { kind: 'rom', k: 0.45, cap: 'Stiff fingers stay together' } }
     ];
     G.EXS.forEach((e, i) => { e.n = i + 1; e.slug = e.id.replace(/_/g, '-'); });
+
+    /* ======================================================================
+       WHY IT IS PRESCRIBED — disease-related reason, shown as a simulation.
+       DZ: condition -> m: tissue mechanism drawn in why-sim.js
+                        what: the condition in a few words
+                        inside: what goes wrong inside the body
+       ACT: exercise -> joint: body part shown · act: what the exercise does
+       Mechanisms: capsule · tight · weak · scar · pain · tendon · oa · spine
+       ==================================================================== */
+    G.DZ = {
+        'Mechanical neck pain':        { m: 'spine',  what: 'Strained neck joints & muscles', inside: 'Small neck joints stiffen and muscles guard, so a few levels stop moving and the rest get overloaded' },
+        'Neck stiffness':              { m: 'spine',  what: 'Neck that won’t move freely', inside: 'Some neck segments lock up, so bending relies on only a few levels' },
+        'After a neck collar':         { m: 'spine',  what: 'Neck kept still for weeks', inside: 'Weeks without movement leave neck joints stiff and the muscles weak and guarded' },
+        'Neck muscle tightness':       { m: 'tight',  what: 'Shortened side-neck muscles', inside: 'Muscle fibres stay short and form tight knots that pull the head and block the tilt' },
+        'Frozen shoulder':             { m: 'capsule', what: 'Adhesive capsulitis', inside: 'The joint capsule becomes inflamed, thick and shrinks — it sticks to the ball and locks the shoulder' },
+        'Frozen shoulder (painful stage)': { m: 'pain', what: 'Freezing stage — pain at night & rest', inside: 'The inflamed capsule fires pain signals; muscles guard and hold the arm stiff' },
+        'Rotator cuff pain':           { m: 'tendon', what: 'Irritated cuff tendon', inside: 'Cuff tendon fibres become swollen and disorganised, so lifting the arm pinches and hurts' },
+        'Stiffness after surgery':     { m: 'scar',   what: 'Healing after an operation', inside: 'Healing makes scar tissue; with little movement the fibres glue the joint layers together' },
+        'Shoulder stiffness':          { m: 'capsule', what: 'Tight shoulder joint', inside: 'The capsule around the ball-and-socket tightens, so the ball can’t roll and glide fully' },
+        'After shoulder surgery':      { m: 'scar',   what: 'Repair healing', inside: 'Scar tissue forms around the repair; without safe movement it binds the joint' },
+        'Shoulder injury':             { m: 'pain',   what: 'Recent shoulder injury', inside: 'The injured joint is inflamed; pain makes muscles guard and stop the arm moving' },
+        'Restricted flexion':          { m: 'capsule', what: 'Arm can’t go up', inside: 'The lower part of the capsule is shrunken, so it blocks the arm lifting forward' },
+        'Posterior shoulder tightness': { m: 'tight', what: 'Tight back of shoulder', inside: 'Muscles and capsule at the back of the shoulder are short, pulling the ball forward' },
+        'Posture-related shoulder pain': { m: 'weak', what: 'Rounded-shoulder posture', inside: 'Shoulder-blade muscles switch off and weaken, so the shoulders roll forward and pinch' },
+        'Shoulder-blade control':      { m: 'weak',   what: 'Poor blade control', inside: 'Blade muscles fire late and weakly, so the shoulder blade wobbles during arm movement' },
+        'Elbow stiffness':             { m: 'scar',   what: 'Stiff elbow', inside: 'Scar and tight capsule tissue form across the elbow hinge and stop it bending' },
+        'Elbow injury (cleared)':      { m: 'scar',   what: 'Healed elbow injury', inside: 'The healed injury leaves scar fibres laid down in random directions, limiting the hinge' },
+        'After elbow surgery':         { m: 'scar',   what: 'Healing elbow', inside: 'Surgical scar tissue binds the hinge if it is not moved gently' },
+        'Upper-back stiffness':        { m: 'spine',  what: 'Stiff thoracic spine', inside: 'Upper-back segments stiffen, so turning comes from only a few levels' },
+        'Mechanical back pain':        { m: 'spine',  what: 'Strained back joints & muscles', inside: 'Back muscles guard and a few segments lock, overloading the others' },
+        'Trunk mobility loss':         { m: 'spine',  what: 'Reduced trunk movement', inside: 'Several spinal levels move less, so the trunk can’t rotate smoothly' },
+        'Hip abductor weakness':       { m: 'weak',   what: 'Weak side-hip muscles', inside: 'Only a few side-hip muscle fibres switch on, so the pelvis drops when you stand on one leg' },
+        'Hip osteoarthritis':          { m: 'oa',     what: 'Wear in the hip joint', inside: 'Cartilage thins and muscles weaken, so the hip joint takes too much load and aches' },
+        'Gait & balance problems':     { m: 'weak',   what: 'Unsteady walking', inside: 'Hip and leg muscles respond weakly and slowly, so balance is lost easily' },
+        'Hip flexor weakness':         { m: 'weak',   what: 'Weak hip-lifting muscles', inside: 'Few hip flexor fibres fire, so the knee and foot barely lift' },
+        'Tripping / low foot clearance': { m: 'weak', what: 'Feet catch the ground', inside: 'Weak hip lift means the foot skims the floor and catches' },
+        'Gait problems':               { m: 'weak',   what: 'Shuffling walk', inside: 'Leg muscles produce little force, so steps are short and low' },
+        'Knee stiffness':              { m: 'scar',   what: 'Stiff knee', inside: 'Scar tissue and tight capsule tissue form in the knee and stop it bending' },
+        'Knee injury':                 { m: 'scar',   what: 'Healing knee injury', inside: 'The healing knee lays down scar fibres that limit bending' },
+        'After knee surgery':          { m: 'scar',   what: 'Healing after knee surgery', inside: 'Scar tissue and swelling glue the knee layers; early movement keeps them gliding' },
+        'Knee rehabilitation':         { m: 'weak',   what: 'Rebuilding the knee', inside: 'Thigh muscles shrink after injury, so the knee feels unstable' },
+        'Leg weakness':                { m: 'weak',   what: 'Weak leg muscles', inside: 'Fewer leg muscle fibres fire, so standing and stepping feel shaky' },
+        'Daily mobility':              { m: 'weak',   what: 'Everyday movement', inside: 'Little use lets leg muscles weaken, so steps and stairs become harder' },
+        'Knee osteoarthritis':         { m: 'oa',     what: 'Wear in the knee joint', inside: 'Cartilage thins and the thigh muscle weakens, so the knee joint is overloaded and painful' },
+        'After knee surgery (later)':  { m: 'weak',   what: 'Late stage after surgery', inside: 'The knee has healed but the thigh muscles are still small and weak' },
+        'Leg deconditioning':          { m: 'weak',   what: 'Loss of leg fitness', inside: 'Inactivity shrinks leg muscles so rising from a chair is hard' },
+        'Calf weakness':               { m: 'weak',   what: 'Weak calf muscles', inside: 'Few calf fibres fire, so push-off when walking is weak' },
+        'Ankle sprain':                { m: 'tendon', what: 'Stretched ankle ligament', inside: 'Torn ligament fibres heal in a messy, weak pattern and the ankle feels wobbly' },
+        'Achilles rehabilitation':     { m: 'tendon', what: 'Achilles tendon problem', inside: 'Achilles fibres are swollen and disorganised, so the tendon can’t take load' },
+        'Wrist stiffness':             { m: 'scar',   what: 'Stiff wrist', inside: 'After a cast, scar and capsule tissue bind the wrist so it barely bends' },
+        'Wrist injury (cleared)':      { m: 'scar',   what: 'Healed wrist injury', inside: 'Healing leaves random scar fibres across the wrist joint' },
+        'After wrist surgery':         { m: 'scar',   what: 'Healing wrist', inside: 'Surgical scar tissue glues the wrist layers if not moved gently' },
+        'Reduced grip strength':       { m: 'weak',   what: 'Weak grip', inside: 'Forearm and hand muscles produce little force, so the fist won’t close firmly' },
+        'Hand weakness after a cast':  { m: 'weak',   what: 'Weak hand after a cast', inside: 'Weeks in a cast shrink hand muscles and slow their nerve signals' },
+        'Hand injury':                 { m: 'scar',   what: 'Healing hand injury', inside: 'Scar tissue around finger tendons and joints limits how far fingers move' },
+        'Finger stiffness':            { m: 'scar',   what: 'Stiff finger joints', inside: 'Finger joint capsules tighten and scar tissue stops them opening' },
+        'Hand weakness':               { m: 'weak',   what: 'Weak hand muscles', inside: 'Small hand muscles fire weakly, so fingers can’t spread or grip well' },
+        'Cervical mobility deficits':  { m: 'spine',  what: 'Reduced neck movement', inside: 'Some cervical levels move less than they should, so turning and tilting are limited' },
+        'Shoulder mobility deficits':  { m: 'capsule', what: 'Limited shoulder movement', inside: 'Tight capsule and soft tissue around the shoulder limit how far the arm can travel' },
+    };
+    G.ACT = {
+        neck_flexion:               { joint: 'neck', act: 'Glides every neck level through its range, so guarded muscles relax and stiff joints loosen' },
+        neck_rotation:              { joint: 'neck', act: 'Turns each neck level gently, sharing the movement out instead of loading one spot' },
+        neck_lateral_flexion:       { joint: 'neck', act: 'A slow side-bend lengthens the tight side-neck muscle and releases its knots' },
+        shoulder_flexion:           { joint: 'shoulder', act: 'Each lift gently stretches the lower capsule, so the ball rolls further each week' },
+        shoulder_abduction:         { joint: 'shoulder', act: 'Lifting sideways stretches the lower capsule and keeps the ball gliding' },
+        shoulder_external_rotation: { joint: 'shoulder', act: 'Turning outward stretches the front capsule — the part that tightens first' },
+        pendulum:                   { joint: 'shoulder', act: 'A relaxed, gravity-led swing moves joint fluid and calms pain without muscle effort' },
+        assisted_shoulder_flexion:  { joint: 'shoulder', act: 'The good arm does the work, so the stiff capsule is stretched without strain' },
+        external_rotation_stick:    { joint: 'shoulder', act: 'The stick gives a steady push that stretches the tight front capsule' },
+        finger_walk:                { joint: 'shoulder', act: 'Small steps up the wall stretch the capsule a little more each time' },
+        table_slide:                { joint: 'shoulder', act: 'The table carries the arm’s weight while the capsule is stretched forward' },
+        cross_body_stretch:         { joint: 'shoulder', act: 'Pulling across the chest lengthens the tight tissue at the back of the shoulder' },
+        scapular_squeeze:           { joint: 'shoulder blade', act: 'Squeezing switches on more blade-muscle fibres and builds their strength' },
+        elbow_flexion:              { joint: 'elbow', act: 'Repeated bending stretches scar fibres and lines them up, so the hinge glides' },
+        trunk_rotation:             { joint: 'spine', act: 'Turning moves every spinal level, freeing the stiff ones and calming guarding' },
+        hip_abduction:              { joint: 'hip', act: 'Lifting the leg out recruits more side-hip fibres and makes the muscle bigger' },
+        standing_march:             { joint: 'hip', act: 'Lifting the knee trains hip flexor fibres to fire faster and stronger' },
+        standing_knee_flexion:      { joint: 'knee', act: 'Bending stretches knee scar tissue and keeps the joint layers gliding' },
+        forward_lunge:              { joint: 'leg', act: 'Controlled lowering recruits more leg fibres and trains balance' },
+        squat:                      { joint: 'knee', act: 'Squats build thigh muscle that shares the load and pumps fluid into the cartilage' },
+        heel_raise:                 { joint: 'calf / ankle', act: 'Rising onto toes loads the calf and tendon so fibres grow strong and aligned' },
+        wrist_flexion:              { joint: 'wrist', act: 'Bending back and forth stretches scar fibres and restores wrist glide' },
+        finger_flexion:             { joint: 'hand', act: 'Squeezing recruits more grip fibres and rebuilds hand strength' },
+        finger_spread:              { joint: 'fingers', act: 'Spreading opens tight finger tissue and works the small hand muscles that hold fingers apart' }
+    };
+
+    /* ======================================================================
+       CLINICAL REASONS — from the Rehab AI Exercise Database document
+       (Clinical Reason + Related Conditions, word for word).
+       'Doc name=DZ key' links a related condition to its simulation in DZ.
+       ==================================================================== */
+    G.CLIN = {
+        neck_flexion:               { reason: 'Improve restricted neck movement and movement tolerance.', related: ['Mechanical neck pain', 'Cervical stiffness=Neck stiffness', 'Post-immobilization stiffness=After a neck collar'] },
+        neck_rotation:              { reason: 'Improve restricted cervical rotation.', related: ['Mechanical neck pain', 'Cervical mobility deficits', 'Neck stiffness'] },
+        neck_lateral_flexion:       { reason: 'Improve restricted side-bending movement.', related: ['Mechanical neck pain', 'Cervical muscle tightness=Neck muscle tightness', 'Cervical mobility deficits'] },
+        shoulder_flexion:           { reason: 'Improve shoulder elevation and functional reaching.', related: ['Frozen shoulder', 'Rotator cuff-related shoulder pain=Rotator cuff pain', 'Postoperative shoulder stiffness (when permitted)=Stiffness after surgery'] },
+        shoulder_abduction:         { reason: 'Improve sideways shoulder elevation and movement control.', related: ['Frozen shoulder', 'Shoulder stiffness', 'Selected rotator cuff disorders=Rotator cuff pain'] },
+        shoulder_external_rotation: { reason: 'Improve external rotation mobility and, when appropriately resisted, rotator cuff strength.', related: ['Frozen shoulder', 'Shoulder stiffness', 'Selected rotator cuff-related conditions=Rotator cuff pain'] },
+        pendulum:                   { reason: 'Provide gentle shoulder movement with minimal active muscle effort.', related: ['Selected stages of frozen shoulder=Frozen shoulder (painful stage)', 'Postoperative shoulder rehabilitation=After shoulder surgery', 'Selected shoulder injuries=Shoulder injury'] },
+        assisted_shoulder_flexion:  { reason: 'Improve shoulder elevation while reducing the effort required from the affected arm.', related: ['Frozen shoulder', 'Postoperative stiffness (when cleared)=Stiffness after surgery', 'Shoulder mobility restrictions=Restricted flexion'] },
+        external_rotation_stick:    { reason: 'Improve restricted shoulder external rotation through assisted movement.', related: ['Frozen shoulder', 'Shoulder stiffness', 'Selected postoperative rehabilitation stages=After shoulder surgery'] },
+        finger_walk:                { reason: 'Gradually improve shoulder elevation and reaching ability.', related: ['Frozen shoulder', 'Shoulder stiffness', 'Selected rotator cuff-related conditions=Rotator cuff pain'] },
+        table_slide:                { reason: 'Practice assisted shoulder flexion with support from the table.', related: ['Frozen shoulder', 'Postoperative shoulder stiffness (when permitted)=Stiffness after surgery', 'Restricted shoulder flexion=Restricted flexion'] },
+        cross_body_stretch:         { reason: 'Improve horizontal shoulder movement when restricted.', related: ['Selected shoulder stiffness=Shoulder stiffness', 'Posterior shoulder tightness', 'Selected shoulder mobility deficits=Shoulder mobility deficits'] },
+        scapular_squeeze:           { reason: 'Improve scapular muscle control and shoulder-girdle coordination.', related: ['Postural-related shoulder discomfort=Posture-related shoulder pain', 'Selected rotator cuff-related conditions=Rotator cuff pain', 'Scapular movement deficits=Shoulder-blade control'] },
+        elbow_flexion:              { reason: 'Improve elbow range of motion and functional arm use.', related: ['Elbow stiffness after immobilization=Elbow stiffness', 'Selected elbow injuries after clearance=Elbow injury (cleared)', 'Postoperative elbow rehabilitation=After elbow surgery'] },
+        trunk_rotation:             { reason: 'Improve trunk rotational mobility and movement tolerance.', related: ['Thoracic stiffness=Upper-back stiffness', 'Selected mechanical back pain conditions=Mechanical back pain', 'Trunk mobility deficits=Trunk mobility loss'] },
+        hip_abduction:              { reason: 'Strengthen the hip abductors and improve pelvic control.', related: ['Hip abductor weakness', 'Hip osteoarthritis rehabilitation=Hip osteoarthritis', 'Selected gait and balance deficits=Gait & balance problems'] },
+        standing_march:             { reason: 'Practice hip flexion and controlled leg lifting.', related: ['Hip flexor weakness', 'Reduced foot clearance=Tripping / low foot clearance', 'Selected gait rehabilitation programs=Gait problems'] },
+        standing_knee_flexion:      { reason: 'Improve knee flexion movement and strengthen the knee flexors when appropriate.', related: ['Knee stiffness', 'Selected knee injury rehabilitation=Knee injury', 'Postoperative knee rehabilitation (when permitted)=After knee surgery'] },
+        forward_lunge:              { reason: 'Develop lower-limb strength, balance, and control during forward stepping.', related: ['Selected knee rehabilitation=Knee rehabilitation', 'Lower-limb weakness=Leg weakness', 'Functional mobility deficits=Daily mobility'] },
+        squat:                      { reason: 'Develop weight-bearing lower-limb strength and functional movement capacity.', related: ['Knee osteoarthritis rehabilitation=Knee osteoarthritis', 'Selected postoperative knee rehabilitation=After knee surgery (later)', 'Lower-limb deconditioning=Leg deconditioning'] },
+        heel_raise:                 { reason: 'Strengthen the calf muscles and improve ankle plantarflexion capacity.', related: ['Calf weakness', 'Selected ankle sprain rehabilitation=Ankle sprain', 'Achilles tendon rehabilitation (when prescribed)=Achilles rehabilitation', 'Gait deficits=Gait problems'] },
+        wrist_flexion:              { reason: 'Improve wrist mobility and functional hand positioning.', related: ['Wrist stiffness after immobilization=Wrist stiffness', 'Selected wrist injuries after clearance=Wrist injury (cleared)', 'Postoperative wrist rehabilitation=After wrist surgery'] },
+        finger_flexion:             { reason: 'Improve grip strength and hand function when strengthening is indicated.', related: ['Hand weakness after immobilization=Hand weakness after a cast', 'Selected hand injury rehabilitation=Hand injury', 'Reduced grip strength'] },
+        finger_spread:              { reason: 'Improve finger mobility, coordination, and hand opening.', related: ['Finger stiffness', 'Selected hand injury rehabilitation=Hand injury', 'Reduced finger mobility after immobilization=Finger stiffness'] }
+    };
+    /* Clinical considerations (same document) — shown when an exercise's related conditions match */
+    G.CONSIDER = [
+        { re: /frozen/i, t: 'Frozen shoulder', r: 'Prioritize comfortable, graded mobility exercises. Avoid forceful stretching during highly painful stages.' },
+        { re: /rotator cuff/i, t: 'Rotator cuff disorders', r: 'Select shoulder movements based on pain, strength, and the specific tendon or functional deficit.' },
+        { re: /osteoarthritis/i, t: 'Osteoarthritis', r: 'Adjust range, repetitions, and resistance according to symptoms and functional capacity.' },
+        { re: /postoperative/i, t: 'Postoperative rehabilitation', r: 'Follow the surgeon’s restrictions and the relevant postoperative protocol before recommending an exercise.' },
+        { re: /neck|cervical|back|thoracic|trunk/i, t: 'Neck or back conditions', r: 'Screen for neurological symptoms and diagnosis-specific movement restrictions.' },
+        { re: /gait|balance|foot clearance|functional mobility|lower-limb weakness/i, t: 'Balance and walking deficits', r: 'Provide stable support or supervision where necessary.' }
+    ];
+    G.CLIN_NOTE = 'A related disease does not automatically mean an exercise is suitable. Your physiotherapist uses your diagnosis, symptoms, movement assessment and restrictions to choose exercises. These exercises support rehabilitation but do not independently diagnose or treat a disease.';
 })(typeof window !== 'undefined' ? window : globalThis);
