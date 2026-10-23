@@ -1,35 +1,24 @@
 /* Layout: four stacked category "layers", each a band of exercise cards; one exercise = one page view.
    Three fixed colour roles repeat everywhere: blue = what to do, coral = why (problem), violet = how it is measured. */
 :root {
-    --bg: #F2F5F9;
+    color-scheme: light;
+    --bg: #F6F6F3;
     --paper: #FFFFFF;
-    --ink: #0E2340;
-    --ink-2: #4A5A72;
-    --line: #DCE4EE;
-    --plate: #E7EEF7;
-    --do: #1F5FBF;      --do-soft: #E4EEFB;
-    --why: #C8452F;     --why-soft: #FCE9E5;
-    --how: #5B46B8;     --how-soft: #EDE9FB;
-    --ok: #17845A;      --ok-soft: #E1F3EA;
-    --fs: #0B6E8E;      --fs-soft: #DDF1F7;
-    --neck: #2D7FA6; --upper: #1F5FBF; --lower: #17845A; --hand: #B5602E;
-    --shadow: 0 1px 2px rgba(14,35,64,.06), 0 8px 24px rgba(14,35,64,.07);
+    --ink: #233036;
+    --ink-2: #5E6B6C;
+    --line: #E3E3DD;
+    --plate: #EEF0EE;
+    --do: #3A6B7E;      --do-soft: #E3EEF1;
+    --why: #B4623F;     --why-soft: #F8E8DE;
+    --how: #6A5870;     --how-soft: #EFE8F0;
+    --ok: #4F6734;      --ok-soft: #E8EFDD;
+    --fs: #3F8590;      --fs-soft: #DDEFF2;
+    --neck: #5F8A63; --upper: #9F6D2D; --lower: #9A686B; --hand: #324E59;
+    --shadow: 0 1px 2px rgba(35,48,54,.05), 0 10px 26px rgba(35,48,54,.06);
     --f-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
     --f-body: 'Figtree', 'Segoe UI', system-ui, sans-serif;
     --f-num: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-    --bg: #0B1626; --paper: #12223A; --ink: #E8EEF7; --ink-2: #A8B6CA; --line: #22385A; --plate: #D3DEEC;
-    --do: #6EA4F2; --do-soft: #18304F; --why: #F08C78; --why-soft: #3A2026; --how: #A796F2; --how-soft: #272449;
-    --ok: #55C796; --ok-soft: #133528; --fs: #5CC4E2; --fs-soft: #12323E;
-    --neck: #5CB3DB; --upper: #6EA4F2; --lower: #55C796; --hand: #EE9A62;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark } }
-:root[data-theme="dark"] {
-    --bg: #0B1626; --paper: #12223A; --ink: #E8EEF7; --ink-2: #A8B6CA; --line: #22385A; --plate: #D3DEEC;
-    --do: #6EA4F2; --do-soft: #18304F; --why: #F08C78; --why-soft: #3A2026; --how: #A796F2; --how-soft: #272449;
-    --ok: #55C796; --ok-soft: #133528; --fs: #5CC4E2; --fs-soft: #12323E;
-    --neck: #5CB3DB; --upper: #6EA4F2; --lower: #55C796; --hand: #EE9A62;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark }
 
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--f-body); }
@@ -200,3 +189,24 @@ footer .wrap { padding-block: 16px 24px; }
 .pstage .fig { inset: 12% 6% 12%; }
 .pb-read { position: absolute; left: 12px; right: 12px; bottom: 10px; text-align: center; font: 600 .86rem var(--f-num); color: #7A2416; background: rgba(255,255,255,.85); border-radius: 999px; padding: 6px 10px; }
 .pb-read em { font-style: normal; color: #C8452F; font-family: var(--f-body); font-weight: 800; }
+
+
+/* ==== Category palettes (light) — each layer and its exercise pages carry their own colours ==== */
+#neck,  .detail:has(.back[href="#neck"])  { --c: #5F8A63; --c-deep: #223125; --c-soft: #E1ECE6; --c-wash: #EDF3F0; --c-edge: #C5D9D3; }
+#upper, .detail:has(.back[href="#upper"]) { --c: #9F6D2D; --c-deep: #624621; --c-soft: #F8E7CC; --c-wash: #FBF3E6; --c-edge: #EBD3AA; }
+#lower, .detail:has(.back[href="#lower"]) { --c: #9A686B; --c-deep: #554A53; --c-soft: #F1E1DC; --c-wash: #F8EFEC; --c-edge: #E2C6BF; }
+#hand,  .detail:has(.back[href="#hand"])  { --c: #324E59; --c-deep: #1F3139; --c-soft: #E4E7E8; --c-wash: #EEF0F0; --c-edge: #CDD6D9; }
+
+.layer { background: var(--c-wash); border-block: 1px solid var(--c-edge); padding-block: 30px 22px; margin-top: 22px; }
+.layer-head h2 { color: var(--c-deep); }
+.layer-head .badge { box-shadow: 0 6px 14px -6px var(--c); }
+.layer .card { border-color: var(--c-edge); }
+.layer .card:hover { border-color: var(--c); box-shadow: 0 12px 28px -14px var(--c); }
+.layer .plate { background: var(--c-soft); }
+.layer .card-body h3 { color: var(--c-deep); }
+
+.detail .stage { background: var(--c-soft); border-color: var(--c-edge); }
+.detail .d-head h1 { color: var(--c-deep); }
+.detail .panel { border-color: var(--c-edge); }
+.detail .back:hover { color: var(--c); }
+.detail .pager a:hover { border-color: var(--c); color: var(--c-deep); }
