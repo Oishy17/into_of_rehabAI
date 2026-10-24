@@ -115,7 +115,7 @@
     function card(e) {
         const fs = e.for.some(c => c.indexOf(FS) === 0);
         const first = e.for[0];
-        return '<a class="card" href="#ex-' + e.slug + '" aria-label="' + esc(e.name) + '">' +
+        return '<a class="card" data-cat="' + e.cat + '" href="#ex-' + e.slug + '" aria-label="' + esc(e.name) + '">' +
             '<div class="plate"><span class="num" style="background:' + cvar(e.cat) + '">' + e.n + '</span>' +
             (fs ? '<span class="fsflag">Frozen shoulder</span>' : '') +
             '<div class="fig" data-id="' + e.id + '"></div>' +
@@ -134,7 +134,7 @@
             '<span class="tag t-how"><span class="ic">' + I.how + '</span>How it’s measured</span></div></section>' +
             CATS.map(c => {
                 const list = EXS.filter(e => e.cat === c.id);
-                return '<section class="layer" id="' + c.id + '"><div class="wrap">' +
+                return '<section class="layer" data-cat="' + c.id + '" id="' + c.id + '"><div class="wrap">' +
                     '<div class="layer-head"><span class="badge" style="background:' + cvar(c.id) + '">' + CAT_ICON[c.id] + '</span>' +
                     '<div><h2>' + esc(c.name) + '</h2><small>' + list.length + ' exercises</small></div><span class="rule" style="background:' + cvar(c.id) + '"></span></div>' +
                     '<div class="grid">' + list.map(card).join('') + '</div></div></section>';
@@ -270,7 +270,7 @@
     function page(e) {
         const i = EXS.indexOf(e), prev = EXS[(i + EXS.length - 1) % EXS.length], next = EXS[(i + 1) % EXS.length];
         const u = U(e), c = catOf(e.cat);
-        return '<article class="wrap detail">' +
+        return '<article class="wrap detail" data-cat="' + e.cat + '">' +
             '<a class="back" href="#' + e.cat + '">' + I.back + 'All exercises</a>' +
             '<header class="d-head"><div><span class="cat" style="color:' + cvar(e.cat) + '">' + e.n + ' · ' + esc(c.name) + '</span><h1>' + esc(e.name) + '</h1></div>' +
             '<span class="d-how"><span class="tag t-do" style="padding:4px"><span class="ic">' + I.do + '</span></span>' + esc(e.how) + '</span></header>' +
@@ -420,7 +420,7 @@
     }
     document.addEventListener('DOMContentLoaded', function () {
         needSim(function () {});   /* preload the simulation */
-        $('#jump').innerHTML = CATS.map(c => '<a href="#' + c.id + '"><i style="background:' + cvar(c.id) + '"></i>' + esc(c.name) + '</a>').join('');
+        $('#jump').innerHTML = CATS.map(c => '<a data-cat="' + c.id + '" href="#' + c.id + '"><i style="background:' + cvar(c.id) + '"></i>' + esc(c.name) + '</a>').join('');
         window.addEventListener('hashchange', render);
         render();
         requestAnimationFrame(tick);

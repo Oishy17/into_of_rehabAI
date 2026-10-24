@@ -12,7 +12,7 @@
     --how: #5B46B8;     --how-soft: #EDE9FB;
     --ok: #17845A;      --ok-soft: #E1F3EA;
     --fs: #0B6E8E;      --fs-soft: #DDF1F7;
-    --neck: #2D7FA6; --upper: #1F5FBF; --lower: #17845A; --hand: #B5602E;
+    --neck: #0E8A93; --upper: #3554C8; --lower: #2E8A4F; --hand: #C2631F;
     --shadow: 0 1px 2px rgba(14,35,64,.06), 0 8px 24px rgba(14,35,64,.07);
     --f-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
     --f-body: 'Figtree', 'Segoe UI', system-ui, sans-serif;
@@ -22,13 +22,13 @@
     --bg: #0B1626; --paper: #12223A; --ink: #E8EEF7; --ink-2: #A8B6CA; --line: #22385A; --plate: #D3DEEC;
     --do: #6EA4F2; --do-soft: #18304F; --why: #F08C78; --why-soft: #3A2026; --how: #A796F2; --how-soft: #272449;
     --ok: #55C796; --ok-soft: #133528; --fs: #5CC4E2; --fs-soft: #12323E;
-    --neck: #5CB3DB; --upper: #6EA4F2; --lower: #55C796; --hand: #EE9A62;
+    --neck: #4CC3C8; --upper: #8EA2F5; --lower: #63C98A; --hand: #F0A066;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark } }
 :root[data-theme="dark"] {
     --bg: #0B1626; --paper: #12223A; --ink: #E8EEF7; --ink-2: #A8B6CA; --line: #22385A; --plate: #D3DEEC;
     --do: #6EA4F2; --do-soft: #18304F; --why: #F08C78; --why-soft: #3A2026; --how: #A796F2; --how-soft: #272449;
     --ok: #55C796; --ok-soft: #133528; --fs: #5CC4E2; --fs-soft: #12323E;
-    --neck: #5CB3DB; --upper: #6EA4F2; --lower: #55C796; --hand: #EE9A62;
+    --neck: #4CC3C8; --upper: #8EA2F5; --lower: #63C98A; --hand: #F0A066;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark }
 
 * { box-sizing: border-box; }
@@ -267,3 +267,50 @@ footer .wrap { padding-block: 16px 24px; }
 .rx-cons-grid div { background: var(--how-soft); border-radius: 14px; padding: 10px 12px; display: grid; gap: 3px; font-size: .88rem; line-height: 1.35; }
 .rx-cons-grid b { color: var(--how); }
 .rx-note b { color: var(--ink); }
+
+/* ==========================================================================
+   CATEGORY PALETTES — each body region has its own colour family.
+   --c main · --c-deep text on light · --c-soft tint · --c-p1/--c-p2 backdrop
+   behind Sophia. The three meaning colours (blue = what to do, coral = why,
+   violet = how it is measured) are unchanged.
+     Face & Neck  · Lagoon teal      Upper Body · Sapphire
+     Lower Body   · Forest green     Hand & Wrist · Amber clay
+   ========================================================================== */
+[data-cat="neck"]  { --c: #0E8A93; --c-deep: #08626A; --c-soft: #DDF3F3; --c-p1: #EAF7F6; --c-p2: #CBE9E7; }
+[data-cat="upper"] { --c: #3554C8; --c-deep: #22388F; --c-soft: #E3E8FB; --c-p1: #EEF1FD; --c-p2: #D3DCF7; }
+[data-cat="lower"] { --c: #2E8A4F; --c-deep: #1D6036; --c-soft: #E0F2E6; --c-p1: #EDF7F0; --c-p2: #CFE8D7; }
+[data-cat="hand"]  { --c: #C2631F; --c-deep: #8C4413; --c-soft: #FBEADB; --c-p1: #FDF3EA; --c-p2: #F3DCC5; }
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) [data-cat="neck"]  { --c: #4CC3C8; --c-deep: #8EDDE0; --c-soft: #10343A; --c-p1: #D9EEED; --c-p2: #B7DCDA; }
+    :root:not([data-theme="light"]) [data-cat="upper"] { --c: #8EA2F5; --c-deep: #BAC7FA; --c-soft: #1B2752; --c-p1: #DFE5FA; --c-p2: #BFCBF0; }
+    :root:not([data-theme="light"]) [data-cat="lower"] { --c: #63C98A; --c-deep: #9EE0B5; --c-soft: #123524; --c-p1: #DCEFE2; --c-p2: #BCDDC7; }
+    :root:not([data-theme="light"]) [data-cat="hand"]  { --c: #F0A066; --c-deep: #F7C49D; --c-soft: #3A2414; --c-p1: #F6E8DA; --c-p2: #E8CDB2; }
+}
+:root[data-theme="dark"] [data-cat="neck"]  { --c: #4CC3C8; --c-deep: #8EDDE0; --c-soft: #10343A; --c-p1: #D9EEED; --c-p2: #B7DCDA; }
+:root[data-theme="dark"] [data-cat="upper"] { --c: #8EA2F5; --c-deep: #BAC7FA; --c-soft: #1B2752; --c-p1: #DFE5FA; --c-p2: #BFCBF0; }
+:root[data-theme="dark"] [data-cat="lower"] { --c: #63C98A; --c-deep: #9EE0B5; --c-soft: #123524; --c-p1: #DCEFE2; --c-p2: #BCDDC7; }
+:root[data-theme="dark"] [data-cat="hand"]  { --c: #F0A066; --c-deep: #F7C49D; --c-soft: #3A2414; --c-p1: #F6E8DA; --c-p2: #E8CDB2; }
+
+/* header chips */
+.jump a[data-cat] { background: var(--c-soft); color: var(--c-deep); border-color: transparent; }
+.jump a[data-cat]:hover { border-color: var(--c); }
+
+/* home: each category band */
+.layer[data-cat] { background: linear-gradient(180deg, var(--c-soft) 0, transparent 260px); border-top: 3px solid var(--c); margin-top: 18px; }
+.layer[data-cat] .layer-head h2 { color: var(--c-deep); }
+.layer[data-cat] .layer-head .rule { opacity: .5; }
+
+/* home: cards */
+.card[data-cat] .plate { background: radial-gradient(120% 95% at 50% 18%, var(--c-p1) 0, var(--c-p2) 100%); box-shadow: inset 0 4px 0 var(--c); }
+.card[data-cat]:hover { border-color: var(--c); box-shadow: 0 1px 2px rgba(14,35,64,.06), 0 10px 26px color-mix(in srgb, var(--c) 22%, transparent); }
+.card[data-cat] .card-body h3 { color: var(--ink); }
+
+/* exercise page */
+.detail[data-cat] .back { color: var(--c-deep); }
+.detail[data-cat] .d-head h1 { box-shadow: inset 0 -0.18em 0 color-mix(in srgb, var(--c) 22%, transparent); }
+.detail[data-cat] .stage,
+.detail[data-cat] .frames .fp { background: radial-gradient(120% 95% at 50% 18%, var(--c-p1) 0, var(--c-p2) 100%); }
+.detail[data-cat] .stage { border-color: color-mix(in srgb, var(--c) 35%, var(--line)); box-shadow: inset 0 4px 0 var(--c); }
+.detail[data-cat] .pill { background: color-mix(in srgb, var(--c) 45%, #0E2340); }
+.detail[data-cat] .pill[aria-pressed="false"] { background: rgba(255,255,255,.92); color: color-mix(in srgb, var(--c) 40%, #0E2340); }
+.detail[data-cat] .pager a:hover { border-color: var(--c); color: var(--c-deep); }

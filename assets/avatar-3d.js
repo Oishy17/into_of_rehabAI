@@ -1,522 +1,408 @@
 /**
  * ============================================================================
- *  AVATAR 3D  (v17.6)
+ *  AVATAR 3D  (v19 · Sophia)
  * ============================================================================
- *  The exercise avatar's LOOK, taken from the MotionRx Rehab Coach character:
- *  sculpted head with hair and full beard, black training tee and shorts,
- *  wristbands, dark trainers, its skin / fabric materials and studio lighting
- *  (Three.js r128, bundled in vendor/three.min.js).
+ *  The exercise avatar is SOPHIA: the Renderpeople scan baked in
+ *  sophia-model.js (one skinned mesh, 88 bones, colour / normal / roughness
+ *  maps), drawn with Three.js r128 (vendor/three.min.js) in the MotionRx
+ *  studio lighting below. v21: she wears a sports outfit (loose black
+ *  round-neck T-shirt, teal leggings, black trainers), repainted into her
+ *  textures and reshaped at the hem by tools/gym_outfit.py.
  *
- *  Only the appearance comes from MotionRx. The avatar is driven entirely by
- *  ReMotion's own angles: exercise-figures.js passes the same (exercise,
- *  angle, direction) it uses for its marks, and mapAngles() below — the one
- *  mapping function — turns them into rig joints. No MotionRx angles,
- *  targets, timeline, ROM arcs, gauge, parser or camera logic are used.
+ *  Sophia is driven by the same joint rig the v17.6 character used. The rig
+ *  is now invisible: its joints are placed on Sophia's joints, and every
+ *  frame Sophia's bones copy the rig joints' rotations (retargeting). So
+ *  ReMotion's angles still drive everything exactly as before:
+ *  exercise-figures.js passes the same (exercise, angle, direction) it uses
+ *  for its marks, and mapAngles() below — the one mapping function — turns
+ *  them into rig joints. Anchors, views, props and lighting are unchanged.
  *
- *  Loaded on demand by exercise-figures.js. If WebGL is not available the
- *  figures stay in their 2D drawing.
+ *  Loaded on demand by exercise-figures.js (after sophia-model.js). If WebGL
+ *  is not available the figures show their marks only.
  * ========================================================================== */
 
-/* ===== Sculpted head (from MotionRx) ===== */
+/* ===== Sophia: skinned mesh, rest pose and retargeting onto the rig ===== */
 (function (root) {
   const T = root.THREE;
-  const BEARD = 0; // clean-shaven: no beard or moustache (head hair and brows kept)
-  const HX = 0.074, HY = 0.106, HZ = 0.096;
-  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
-  const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
-  const g2 = (x, y, cx, cy, sx, sy) => { const a = (x - cx) / sx, b = (y - cy) / sy; return Math.exp(-a * a - b * b); };
-  const lin = c => new T.Color(c).convertSRGBToLinear();
 
-  // value noise
-  function hash(x, y, z) { const n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453; return n - Math.floor(n); }
-  function noise(x, y, z) {
-    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
-    let xf = x - xi, yf = y - yi, zf = z - zi;
-    xf = xf * xf * (3 - 2 * xf); yf = yf * yf * (3 - 2 * yf); zf = zf * zf * (3 - 2 * zf);
-    const l = (a, b, t) => a + (b - a) * t;
-    return l(l(l(hash(xi, yi, zi), hash(xi + 1, yi, zi), xf), l(hash(xi, yi + 1, zi), hash(xi + 1, yi + 1, zi), xf), yf),
-      l(l(hash(xi, yi, zi + 1), hash(xi + 1, yi, zi + 1), xf), l(hash(xi, yi + 1, zi + 1), hash(xi + 1, yi + 1, zi + 1), xf), yf), zf);
+  /* model centimetres → rig metres. 1.1 gives Sophia the old character's
+     overall height, so every exercise keeps its framing. */
+  const SCALE = 0.011;
+  /* model space is Z up, facing -Y; rig space is Y up, facing +Z (L side +X) */
+  const Q_AXES = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().set(
+    1, 0, 0, 0,
+    0, 0, 1, 0,
+    0, -1, 0, 0,
+    0, 0, 0, 1));
+  const UP = new T.Vector3(0, 1, 0), DOWN = new T.Vector3(0, -1, 0), FWD = new T.Vector3(0, 0, 1);
+  const LEFT = new T.Vector3(1, 0, 0), RIGHT = new T.Vector3(-1, 0, 0);
+  /* the old character's shoulder → fingertip reach (upper arm, forearm, hand) */
+  const OLD_REACH = 0.29 + 0.258 + 0.18;
+
+  function decode(D) {
+    const raw = atob(D.bin), buf = new ArrayBuffer(raw.length), u8 = new Uint8Array(buf);
+    for (let i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i);
+    const L = D.meta.layout;
+    return {
+      pos: new Float32Array(buf, L[0][0], L[0][1]),
+      nrm: new Int8Array(buf, L[1][0], L[1][1]),
+      uv: new Uint16Array(buf, L[2][0], L[2][1]),
+      si: new Uint8Array(buf, L[3][0], L[3][1]),
+      sw: new Uint8Array(buf, L[4][0], L[4][1]),
+      idx: D.meta.index32 ? new Uint32Array(buf.slice(L[5][0], L[5][0] + L[5][1] * 4)) : new Uint16Array(buf, L[5][0], L[5][1])
+    };
   }
 
-  // Base skull shape from a unit direction (squarer face, tapered jaw, nape)
-  function basePoint(dx, dy, dz, o) {
-    const rxz = Math.hypot(dx, dz), phi = Math.atan2(dx, dz), s = Math.sin(phi), c = Math.cos(phi);
-    const n = c > 0 ? 2.55 : 2.1;
-    let x = HX * Math.sign(s) * Math.pow(Math.abs(s), 2 / n) * rxz;
-    let z = HZ * Math.sign(c) * Math.pow(Math.abs(c), 2 / n) * rxz;
-    const y = HY * dy;
-    const ty = smooth(-0.012, -0.105, y);
-    x *= 1 - 0.3 * ty;
-    if (z < 0) z *= 1 - 0.3 * smooth(-0.025, -0.1, y); else z *= 1 - 0.05 * ty;
-    x *= 1 - 0.07 * smooth(0.04, 0.106, y);
-    if (z > 0) z -= 0.006 * smooth(0.03, 0.1, y) * (z / HZ); // forehead slopes back
-    o.x = x; o.y = y; o.z = z;
-    return o;
+  // rotation whose frame built from (a, b) in bone space lands on (wa, wb) in rig space
+  function frame(a, b) {
+    const x = a.clone().normalize(), z = new T.Vector3().crossVectors(x, b).normalize(), y = new T.Vector3().crossVectors(z, x);
+    return new T.Matrix4().makeBasis(x, y, z);
   }
-
-  // Facial features and region masks at a base point
-  function features(p, dz) {
-    const x = p.x, y = p.y, ax = Math.abs(x);
-    const fm = smooth(0.22, 0.72, dz), sm = smooth(-0.15, 0.45, dz);
-    let disp = 0;
-    // brow ridge, sockets, cheeks
-    disp += fm * (0.0042 * g2(ax, y, 0.029, 0.031, 0.021, 0.0075) + 0.002 * g2(x, y, 0, 0.027, 0.01, 0.01)
-      - 0.0105 * g2(ax, y, 0.031, 0.012, 0.0155, 0.0105)
-      + 0.0042 * g2(ax, y, 0.043, -0.014, 0.017, 0.012)
-      + 0.0028 * g2(x, y, 0, 0.062, 0.04, 0.03));
-    // nose: ramp from bridge to tip, then alae and columella
-    const ny = clamp((0.022 - y) / 0.05, 0, 1.2);
-    const nsx = 0.0052 + 0.0058 * ny;
-    const nose = (0.005 + 0.0165 * Math.pow(ny, 1.25)) * Math.exp(-(x / nsx) * (x / nsx)) * smooth(0.032, 0.016, y) * smooth(-0.035, -0.025, y);
-    disp += fm * (nose + 0.003 * g2(x, y, 0, -0.024, 0.0085, 0.006)
-      + 0.0062 * g2(ax, y, 0.0128, -0.0285, 0.006, 0.0055) - 0.0025 * g2(x, y, 0, -0.0352, 0.012, 0.0028));
-    // mouth and chin
-    disp += fm * (0.0028 * g2(x, y, 0, -0.0385, 0.011, 0.0055) + 0.0052 * g2(x, y, 0, -0.0432, 0.019, 0.0042)
-      - 0.0036 * g2(x, y, 0, -0.0484, 0.021, 0.0015) + 0.0052 * g2(x, y, 0, -0.0532, 0.017, 0.0043)
-      - 0.0022 * g2(x, y, 0, -0.064, 0.015, 0.004) + 0.011 * g2(x, y, 0, -0.085, 0.027, 0.012)
-      - 0.0015 * g2(ax, y, 0.024, -0.0484, 0.004, 0.006));
-    // cheekbones, temples, jaw angle
-    disp += sm * (1 - 0.5 * fm) * (0.0042 * g2(ax, y, 0.058, -0.002, 0.014, 0.016) - 0.0028 * g2(ax, y, 0.066, 0.04, 0.012, 0.02)
-      + 0.0035 * g2(ax, y, 0.052, -0.068, 0.013, 0.013));
-
-    // ---- masks
-    const bow = 0.0012 * Math.exp(-Math.pow(x / 0.006, 2)); // cupid's bow dip at the centre of the upper lip
-    const ly = y + 0.0485, lh = ly > 0 ? 0.0055 - bow : 0.0072;
-    const le = Math.pow(x / 0.0218, 2) + Math.pow(ly / lh, 2);
-    const lip = fm * smooth(1.08, 0.82, le);
-    const f = -0.013 - 0.021 * (1 - smooth(0.024, 0.068, ax)) + 0.034 * smooth(0.056, 0.076, ax);
-    let beard = BEARD * smooth(f + 0.0045, f - 0.0045, y) * smooth(-0.3, 0.05, dz) * (1 - lip);
-    beard *= 1 - smooth(0.02, 0.035, y) * smooth(0.06, 0.07, ax) * 0; // sideburns meet hair
-    const wf = smooth(0.15, 0.6, dz), wb = smooth(0.0, -0.55, dz);
-    const yhF = 0.061 + 0.009 * smooth(0.018, 0.05, ax);
-    const yh = wf * yhF + (1 - wf) * (0.012 * (1 - wb) - 0.078 * wb);
-    // full head of hair: hairline runs around the ear and down to the nape
-    const earD = Math.pow(y / 0.03, 2) + Math.pow((p.z + 0.006) / 0.026, 2);
-    const earCut = 1 - smooth(0.045, 0.062, ax) * smooth(1.35, 0.85, earD);
-    const hair = smooth(yh - 0.003, yh + 0.004, y) * earCut;
-    const top = smooth(0.045, 0.09, y);
-    const yb = 0.0365 + 0.0036 * (1 - Math.pow((ax - 0.031) / 0.019, 2));
-    const bth = 0.0038 + 0.0018 * (1 - smooth(0.012, 0.045, ax));
-    const brow = fm * smooth(0.0095, 0.0145, ax) * smooth(0.054, 0.045, ax) * Math.exp(-Math.pow((y - yb) / bth, 2));
-    const beardTh = 0.0026 + 0.0028 * g2(x, y, 0, -0.092, 0.028, 0.018) + 0.0012 * g2(x, y, 0, -0.038, 0.02, 0.005);
-    const hairTh = hair * (0.0062 + 0.0115 * top * (0.6 + 0.4 * smooth(-0.6, 0.4, dz)) + 0.005 * top * wf);
-    return { disp, lip, beard, beardTh, hair, hairTh, top, brow, fm };
+  function frameQ(a, b, wa, wb) {
+    return new T.Quaternion().setFromRotationMatrix(frame(wa, wb).multiply(frame(a, b).transpose()));
   }
+  // turn bone rotation q (swing only) so its offset t points along `to`
+  function swing(q, t, to) {
+    const d = t.clone().applyQuaternion(q).normalize();
+    return new T.Quaternion().setFromUnitVectors(d, to.clone().normalize()).multiply(q);
+  }
+  const mirror = v => new T.Vector3(-v.x, v.y, v.z);
 
-  // ---- paint the head texture (color, roughness, bump) in sphere UV space
-  function paint(W, H) {
-    const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
-    const cc = mk(), rc = mk(), bc = mk();
-    const ci = cc.getContext('2d').createImageData(W, H), ri = rc.getContext('2d').createImageData(W, H), bi = bc.getContext('2d').createImageData(W, H);
-    const p = { x: 0, y: 0, z: 0 };
-    const SK = [180, 117, 85], HC = [15, 11, 9], LP = [150, 90, 78];
-    for (let j = 0; j < H; j++) {
-      const theta = (j + 0.5) / H * Math.PI, st = Math.sin(theta), dy = Math.cos(theta);
-      for (let i = 0; i < W; i++) {
-        const phi = 1.5 * Math.PI + (i + 0.5) / W * 2 * Math.PI;
-        const dx = -Math.cos(phi) * st, dz = Math.sin(phi) * st;
-        basePoint(dx, dy, dz, p);
-        const F = features(p, dz);
-        const ax = Math.abs(p.x), y = p.y;
-        const low = noise(p.x * 70, p.y * 70, p.z * 70) - 0.5;
-        const pore = noise(p.x * 1500, p.y * 1500, p.z * 1500) - 0.5;
-        const fine = noise(p.x * 3800, p.y * 3800, p.z * 3800) - 0.5;
-        // skin
-        const red = F.fm * (0.9 * g2(ax, y, 0.045, -0.016, 0.02, 0.015) + 1.0 * g2(p.x, y, 0, -0.018, 0.01, 0.016)) + 0.6 * smooth(0.6, 0.0, Math.abs(p.z) / HZ) * smooth(0.06, 0.07, ax) * (1 - F.hair);
-        const under = F.fm * g2(ax, y, 0.031, 0.0005, 0.015, 0.0055);
-        const lid = F.fm * g2(ax, y, 0.031, 0.021, 0.014, 0.005);
-        let r = SK[0] + 16 * low + 7 * pore + 7 * red - 12 * under - 6 * lid;
-        let gg = SK[1] + 12 * low + 5 * pore - 4 * red - 13 * under - 10 * lid;
-        let b = SK[2] + 9 * low + 4 * pore - 4 * red - 8 * under - 4 * lid;
-        // lips
-        const mouth = F.fm * g2(p.x, y, 0, -0.0484, 0.019, 0.0011);
-        const lipK = clamp(F.lip);
-        r += (LP[0] - r) * lipK; gg += (LP[1] - gg) * lipK; b += (LP[2] - b) * lipK;
-        r *= 1 - 0.5 * mouth; gg *= 1 - 0.56 * mouth; b *= 1 - 0.54 * mouth;
-        const nostril = F.fm * g2(ax, y, 0.0082, -0.0318, 0.0033, 0.0019);
-        r *= 1 - 0.35 * nostril; gg *= 1 - 0.4 * nostril; b *= 1 - 0.4 * nostril;
-        // beard: shadowed skin under, strands on top, stubbly edge
-        const strandB = noise(p.x * 2600, p.y * 520, p.z * 2600);
-        const beardCov = F.beard <= 0 ? 0 : smooth(0.22, 0.78, F.beard + fine * 0.5) * (0.82 + 0.3 * (strandB - 0.5));
-        // hair: strands swept back on top, faded short sides
-        const strandH = noise(p.x * 2600, p.y * 2600 * (1 - F.top * 0.7), p.z * 600 + p.y * 900);
-        const hairCov = smooth(0.2, 0.8, F.hair + fine * 0.35) * (0.9 + 0.2 * (strandH - 0.5));
-        const browCov = clamp(F.brow * (0.85 + 0.9 * (noise(p.x * 2400, p.y * 900, p.z * 900) - 0.5)) * 1.5);
-        const shade = Math.max(beardCov, hairCov * 0.8);
-        r *= 1 - 0.25 * shade; gg *= 1 - 0.28 * shade; b *= 1 - 0.25 * shade;
-        const cov = clamp(Math.max(beardCov, hairCov, browCov));
-        const sv = (Math.max(beardCov > hairCov ? strandB : strandH, 0) - 0.5) * 30;
-        r += (HC[0] + sv - r) * cov; gg += (HC[1] + sv * 0.8 - gg) * cov; b += (HC[2] + sv * 0.7 - b) * cov;
-        const k = (j * W + i) * 4;
-        ci.data[k] = clamp(r, 0, 255); ci.data[k + 1] = clamp(gg, 0, 255); ci.data[k + 2] = clamp(b, 0, 255); ci.data[k + 3] = 255;
-        const tz = F.fm * (g2(p.x, y, 0, 0.05, 0.03, 0.03) + g2(p.x, y, 0, -0.01, 0.012, 0.02));
-        const rough = 0.56 - 0.12 * tz - 0.08 * lipK + 0.24 * cov + 0.05 * pore;
-        ri.data[k] = ri.data[k + 1] = ri.data[k + 2] = clamp(rough * 255, 0, 255); ri.data[k + 3] = 255;
-        const bump = 128 + 30 * pore * (1 - cov) + 70 * (cov * ((beardCov > hairCov ? strandB : strandH) - 0.5)) - 10 * mouth + 6 * lipK * (pore + 0.5);
-        bi.data[k] = bi.data[k + 1] = bi.data[k + 2] = clamp(bump, 0, 255); bi.data[k + 3] = 255;
+  /* ---- Sophia's skeleton, and her rest pose matching the rig's zero pose:
+     standing upright, facing +Z, arms hanging with palms in, legs straight,
+     feet flat and forward, fingers straight. The scan's own pose (legs
+     crossed, right hand on the hip) is only the bind pose of the mesh. */
+  function rest(D) {
+    const bones = D.meta.bones, n = bones.length;
+    const name = [], par = [], ix = {}, P = [], Q = [], inv = [];
+    bones.forEach((b, i) => {
+      const m = new T.Matrix4().fromArray(b.bind), p = new T.Vector3(), q = new T.Quaternion(), sc = new T.Vector3();
+      m.decompose(p, q, sc);
+      name[i] = b.name; par[i] = b.parent; ix[b.name] = i;
+      if (b.parent >= i) throw new Error('sophia: bones out of order');
+      P[i] = p.applyQuaternion(Q_AXES).multiplyScalar(SCALE);
+      Q[i] = Q_AXES.clone().multiply(q);
+      inv[i] = m.invert();
+    });
+    // bind-local offsets (rig metres, parent frame) and rotations
+    const t = [], lq = [];
+    for (let i = 0; i < n; i++) {
+      const p = par[i];
+      if (p < 0) { t[i] = new T.Vector3(); lq[i] = new T.Quaternion(); continue; }
+      const qi = Q[p].clone().invert();
+      t[i] = P[i].clone().sub(P[p]).applyQuaternion(qi);
+      lq[i] = qi.multiply(Q[i]);
+    }
+    const B = k => ix[k];
+    const fix = {};   // bone → rest rotation fixed up front (independent of parents)
+
+    // trunk and head: upright, facing forward, no twist (bone x runs up the spine, z to her right)
+    ['hip', 'spine_01', 'spine_02', 'spine_03', 'neck', 'head'].forEach(k => {
+      fix[B(k)] = frameQ(new T.Vector3(1, 0, 0), new T.Vector3(0, 0, 1), UP, RIGHT);
+    });
+
+    // arms: hand hangs, fingers down, palm in, thumb forward; forearm and upper arm
+    // follow the hand's turn so the wrist and elbow keep the scan's natural twist
+    ['l', 'r'].forEach(sd => {
+      const h = B('hand_' + sd), la = B('lowerarm_' + sd), ua = B('upperarm_' + sd);
+      const across = t[B('index_01_' + sd)].clone().sub(t[B('pinky_01_' + sd)]);
+      fix[h] = frameQ(t[B('middle_01_' + sd)], across, DOWN, FWD);
+      const dh = fix[h].clone().multiply(Q[h].clone().invert());
+      fix[la] = swing(dh.multiply(Q[la]), t[h], DOWN);
+      const dl = fix[la].clone().multiply(Q[la].clone().invert());
+      fix[ua] = swing(dl.multiply(Q[ua]), t[la], DOWN);
+    });
+
+    // legs: foot flat and forward (the pitch of the right foot, which stands flat
+    // in the scan), shin and thigh straight down following the foot's turn
+    const ftR = B('foot_r'), aR = t[B('ball_r')].clone().applyQuaternion(Q[ftR]).normalize();
+    const pitch = Math.asin(aR.y);
+    const footDir = new T.Vector3(0, Math.sin(pitch), Math.cos(pitch));
+    ['l', 'r'].forEach(sd => {
+      const ft = B('foot_' + sd), ball = B('ball_' + sd), ll = B('lowerleg_' + sd), ul = B('upperleg_' + sd);
+      const a = t[ball].clone();                                               // ankle → ball, foot frame
+      const e = t[B('foot_end_' + sd)].clone().applyQuaternion(lq[ball]);      // ball → toe tip, foot frame
+      const nrm = a.clone().cross(e).normalize();                              // across the foot
+      const aw = a.clone().applyQuaternion(Q[ft]), side = new T.Vector3(aw.z, 0, -aw.x); // the foot's own left
+      if (nrm.clone().applyQuaternion(Q[ft]).dot(side) < 0) nrm.negate();
+      fix[ft] = frameQ(a, nrm, footDir, LEFT);
+      const df = fix[ft].clone().multiply(Q[ft].clone().invert());
+      fix[ll] = swing(df.multiply(Q[ll]), t[ft], DOWN);
+      const dl = fix[ll].clone().multiply(Q[ll].clone().invert());
+      fix[ul] = swing(dl.multiply(Q[ul]), t[ll], DOWN);
+    });
+
+    // walk the skeleton: fixed bones take their rest rotation, the rest keep their
+    // bind rotation relative to the parent, with a few symmetry / straightening rules
+    const Aq = [];
+    const toeR = new T.Vector3();
+    for (let i = 0; i < n; i++) {
+      const p = par[i], k = name[i];
+      let q = fix[i] ? fix[i].clone() : (p < 0 ? Q[i].clone() : Aq[p].clone().multiply(lq[i]));
+      let m;
+      if ((m = /^(index|middle|ring|pinky)_0([123])_([lr])$/.exec(k))) {
+        // straight fingers, each along its own knuckle line (keeps the natural splay)
+        const dir = t[B(m[1] + '_01_' + m[3])].clone().applyQuaternion(Aq[B('hand_' + m[3])]);
+        const child = B(m[1] + (m[2] === '3' ? '_end_' : '_0' + (+m[2] + 1) + '_') + m[3]);
+        q = swing(q, t[child], dir);
+      } else if ((m = /^thumb_0([123])_([lr])$/.exec(k))) {
+        // open thumb, forward-down beside the index, as the rig's open hand (applyPose, curl 0)
+        const px = m[2] === 'l' ? -1 : 1;
+        const dir = m[1] === '3' ? new T.Vector3(px * 0.2, -0.8, 0.56) : new T.Vector3(px * 0.28, -0.6, 0.74);
+        q = swing(q, t[B(m[1] === '3' ? 'thumb_end_' + m[2] : 'thumb_0' + (+m[1] + 1) + '_' + m[2])], dir);
+      } else if (k === 'shoulder_r') {
+        // right collarbone mirrors the left one (the scan's right hand rests on the hip)
+        const dl = t[B('upperarm_l')].clone().applyQuaternion(Aq[B('shoulder_l')]);
+        q = swing(q, t[B('upperarm_r')], mirror(dl));
+      } else if (k === 'ball_r') {
+        toeR.copy(t[B('foot_end_r')]).applyQuaternion(q);
       }
+      Aq[i] = q;
     }
-    cc.getContext('2d').putImageData(ci, 0, 0); rc.getContext('2d').putImageData(ri, 0, 0); bc.getContext('2d').putImageData(bi, 0, 0);
-    return { color: cc, rough: rc, bump: bc };
+    // toes: the scan's left foot is on tiptoe, so its toes copy the right foot's
+    const bl = B('ball_l');
+    Aq[bl] = swing(Aq[bl], t[B('foot_end_l')], mirror(toeR));
+    for (let i = bl + 1; i < n; i++) if (par[i] === bl) Aq[i] = Aq[bl].clone().multiply(lq[i]);
+
+    // rest positions (hip at the origin)
+    const Ap = [];
+    for (let i = 0; i < n; i++) Ap[i] = par[i] < 0 ? P[i].clone() : t[i].clone().applyQuaternion(Aq[par[i]]).add(Ap[par[i]]);
+    const o = Ap[B('hip')].clone();
+    Ap.forEach(v => v.sub(o));
+    // rest rotations relative to the parent (used by bones the rig does not drive)
+    const rq = Aq.map((q, i) => par[i] < 0 ? q.clone() : Aq[par[i]].clone().invert().multiply(q));
+    return { n, name, par, ix, t, inv, Aq, Ap, rq };
   }
 
-  function irisTexture() {
-    const c = document.createElement('canvas'); c.width = 512; c.height = 256;
-    const x = c.getContext('2d');
-    x.fillStyle = '#efe9e2'; x.fillRect(0, 0, 512, 256);
-    const sc = x.createRadialGradient(256, 128, 40, 256, 128, 200);
-    sc.addColorStop(0, 'rgba(0,0,0,0)'); sc.addColorStop(1, 'rgba(190,120,110,0.35)');
-    x.fillStyle = sc; x.fillRect(0, 0, 512, 256);
-    for (let k = 0; k < 40; k++) { // faint vessels
-      x.strokeStyle = 'rgba(170,60,55,0.12)'; x.lineWidth = 0.8; x.beginPath();
-      let px = Math.random() < 0.5 ? 120 + Math.random() * 60 : 330 + Math.random() * 60, py = 60 + Math.random() * 140; x.moveTo(px, py);
-      for (let s = 0; s < 6; s++) { px += (px < 256 ? 1 : -1) * (6 + Math.random() * 6); py += (Math.random() - 0.5) * 10; x.lineTo(px, py); }
-      x.stroke();
-    }
-    const ir = 44;
-    const ig = x.createRadialGradient(256, 128, 6, 256, 128, ir);
-    ig.addColorStop(0, '#4a2c17'); ig.addColorStop(0.45, '#5b3a1e'); ig.addColorStop(0.85, '#3a2312'); ig.addColorStop(1, '#1d120a');
-    x.fillStyle = ig; x.beginPath(); x.arc(256, 128, ir, 0, Math.PI * 2); x.fill();
-    for (let a = 0; a < 140; a++) { // iris fibres
-      const t = a / 140 * Math.PI * 2, r0 = 16 + Math.random() * 6, r1 = ir - 2 - Math.random() * 10;
-      x.strokeStyle = `rgba(${120 + Math.random() * 60},${80 + Math.random() * 40},${40 + Math.random() * 20},0.35)`; x.lineWidth = 1;
-      x.beginPath(); x.moveTo(256 + Math.cos(t) * r0, 128 + Math.sin(t) * r0); x.lineTo(256 + Math.cos(t + 0.05) * r1, 128 + Math.sin(t + 0.05) * r1); x.stroke();
-    }
-    x.fillStyle = '#060404'; x.beginPath(); x.arc(256, 128, 15, 0, Math.PI * 2); x.fill();
-    x.strokeStyle = 'rgba(20,12,8,0.9)'; x.lineWidth = 3; x.beginPath(); x.arc(256, 128, ir, 0, Math.PI * 2); x.stroke();
-    const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; return t;
-  }
-
-  function build(skinColor) {
-    const group = new T.Group();
-    // ---- head mesh
-    const geo = new T.SphereGeometry(1, 200, 150, 1.5 * Math.PI, 2 * Math.PI);
-    const pos = geo.attributes.position, p = { x: 0, y: 0, z: 0 }, n = new T.Vector3();
-    for (let i = 0; i < pos.count; i++) {
-      const dx = pos.getX(i), dy = pos.getY(i), dz = pos.getZ(i);
-      basePoint(dx, dy, dz, p);
-      const F = features(p, dz);
-      n.set(p.x / (HX * HX), p.y / (HY * HY), p.z / (HZ * HZ)).normalize();
-      const d = F.disp + F.beard * F.beardTh + F.hairTh + F.brow * 0.0011;
-      pos.setXYZ(i, p.x + n.x * d, p.y + n.y * d, p.z + n.z * d);
-    }
-    geo.computeVertexNormals();
-    // weld the UV seam normals (back of head)
-    const nor = geo.attributes.normal, W = 200;
-    for (let row = 0; row <= 150; row++) {
-      const a = row * (W + 1), b = a + W;
-      const x = nor.getX(a) + nor.getX(b), y = nor.getY(a) + nor.getY(b), z = nor.getZ(a) + nor.getZ(b), l = Math.hypot(x, y, z) || 1;
-      nor.setXYZ(a, x / l, y / l, z / l); nor.setXYZ(b, x / l, y / l, z / l);
-    }
-    const tex = paint(1024, 512);
-    const mk = (c, srgb) => { const t = new T.CanvasTexture(c); if (srgb) t.encoding = T.sRGBEncoding; t.anisotropy = 4; return t; };
-    const headMat = new T.MeshPhysicalMaterial({ map: mk(tex.color, true), roughnessMap: mk(tex.rough), roughness: 1, bumpMap: mk(tex.bump), bumpScale: 0.0006,
-      clearcoat: 0.08, clearcoatRoughness: 0.6, sheen: lin(0x2a140e) });
-    const head = new T.Mesh(geo, headMat); group.add(head);
-
-    // surface depth sampler for placing eyes and ears
-    const surfZ = (sx, sy) => { let best = 1e9, z = 0; for (let i = 0; i < pos.count; i++) { const vz = pos.getZ(i); if (vz < 0.02) continue; const d = (pos.getX(i) - sx) ** 2 + (pos.getY(i) - sy) ** 2; if (d < best) { best = d; z = vz; } } return z; };
-
-    // ---- eyes with lids and lash lines
-    const skinMat = new T.MeshPhysicalMaterial({ color: skinColor, roughness: 0.55, sheen: lin(0x3a1a10) });
-    const eyeMat = new T.MeshPhysicalMaterial({ map: irisTexture(), roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.04 });
-    const lashMat = new T.MeshStandardMaterial({ color: lin(0x120d0a), roughness: 0.8 });
-    const ER = 0.0116;
-    [-1, 1].forEach(sg => {
-      const ex = sg * 0.031, ey = 0.0125, S = surfZ(ex, ey);
-      const eye = new T.Group(); eye.position.set(ex, ey, S + 0.0034 - ER); group.add(eye);
-      const ball = new T.Mesh(new T.SphereGeometry(ER, 40, 28, 0, Math.PI * 2), eyeMat);
-      ball.rotation.y = -Math.PI / 2; // iris painted at u=.5 (+x); turn it to face +z
-      eye.add(ball);
-      const up = new T.Mesh(new T.SphereGeometry(ER * 1.06, 32, 16, 0, Math.PI, 0, Math.PI * 0.33), skinMat);
-      up.rotation.x = 0.05; eye.add(up);
-      const lo = new T.Mesh(new T.SphereGeometry(ER * 1.045, 32, 10, 0, Math.PI, Math.PI * 0.73, Math.PI * 0.27), skinMat);
-      lo.rotation.x = -0.05; eye.add(lo);
-      const lashR = ER * 1.06 * Math.sin(Math.PI * 0.33);
-      const lash = new T.Mesh(new T.TorusGeometry(lashR, 0.0007, 6, 40, Math.PI), lashMat);
-      lash.rotation.x = Math.PI / 2; lash.position.y = ER * 1.06 * Math.cos(Math.PI * 0.33);
-      const lashG = new T.Group(); lashG.rotation.x = 0.05; lashG.add(lash); eye.add(lashG);
+  /* ---- which rig joint drives which of Sophia's bones ---- */
+  const FING = ['index', 'middle', 'ring', 'pinky'];
+  function links(S) {
+    const L = [], B = k => S.ix[k];
+    const add = (bone, j, x) => L.push(Object.assign({ i: B(bone), j }, x || {}));
+    add('hip', 'hips'); add('spine_01', 'spine'); add('neck', 'neck'); add('head', 'head');
+    ['L', 'R'].forEach(s => {
+      const sd = s.toLowerCase(), sg = s === 'L' ? 1 : -1;
+      add('upperarm_' + sd, s + '_upperArm');
+      // pronation runs along the forearm: elbow 30 %, twist bone 75 %, hand all of it
+      add('lowerarm_' + sd, s + '_forearm', { twist: 0.7, sg, side: s });
+      add('lowerarm_twist_' + sd, s + '_forearm', { twist: 0.25, sg, side: s });
+      add('hand_' + sd, s + '_hand');
+      FING.forEach((f, k) => ['f1', 'f2', 'f3'].forEach((g, n) => add(f + '_0' + (n + 1) + '_' + sd, null, { finger: [s, k, g] })));
+      add('thumb_01_' + sd, s + '_hand', { mix: { thumb: s, part: 't1', w: 0.4 } });
+      add('thumb_02_' + sd, null, { thumb: [s, 't1'] });
+      add('thumb_03_' + sd, null, { thumb: [s, 't2'] });
+      add('upperleg_' + sd, s + '_thigh'); add('lowerleg_' + sd, s + '_shin'); add('foot_' + sd, s + '_foot');
     });
+    return L;
+  }
+  function jointOf(J, l) {
+    if (l.finger) return J.fingers[l.finger[0]][l.finger[1]][l.finger[2]];
+    if (l.thumb) return J.thumb[l.thumb[0]][l.thumb[1]];
+    return J[l.j];
+  }
 
-    // ---- ears
-    [-1, 1].forEach(sg => {
-      const ear = new T.Group(); ear.position.set(sg * 0.071, 0.004, -0.01); ear.rotation.set(0, sg * 0.18, sg * -0.06); group.add(ear);
-      const lobe = new T.Mesh(new T.SphereGeometry(1, 28, 20), skinMat); lobe.scale.set(0.009, 0.029, 0.018); lobe.position.x = sg * 0.003; ear.add(lobe);
-      const helix = new T.Mesh(new T.TorusGeometry(0.0155, 0.0036, 10, 36, Math.PI * 1.45), skinMat);
-      helix.rotation.set(0, sg * Math.PI / 2, -Math.PI * 0.35); helix.scale.set(1, 1.6, 1.05); helix.position.set(sg * 0.0085, 0.004, -0.002); ear.add(helix);
-      const concha = new T.Mesh(new T.SphereGeometry(1, 20, 14), new T.MeshStandardMaterial({ color: lin(0x8c573e), roughness: 0.7 }));
-      concha.scale.set(0.004, 0.011, 0.008); concha.position.set(sg * 0.0095, -0.002, 0.002); ear.add(concha);
-      if (sg > 0) { const ring = new T.Mesh(new T.TorusGeometry(0.0035, 0.0009, 8, 20), new T.MeshStandardMaterial({ color: 0xd6d9dd, metalness: 1, roughness: 0.2 })); ring.position.set(sg * 0.008, -0.026, 0.004); ring.rotation.y = Math.PI / 2; ear.add(ring); }
+  /* ---- materials: the scan's own maps ---- */
+  function material(D, done) {
+    const mat = new T.MeshStandardMaterial({ skinning: true, roughness: 1, metalness: 0, envMapIntensity: 0.9 });
+    const iso = new T.MeshStandardMaterial({ skinning: true, roughness: 1, metalness: 0, envMapIntensity: 0.9, side: T.DoubleSide });
+    const loader = new T.TextureLoader(), keys = ['map', 'normalMap', 'roughnessMap'];
+    let left = keys.length;
+    const one = () => { if (--left === 0) { mat.needsUpdate = iso.needsUpdate = true; done(); } };
+    keys.forEach(k => {
+      if (!D.tex || !D.tex[k]) { one(); return; }
+      loader.load(D.tex[k], tx => {
+        if (k === 'map') tx.encoding = T.sRGBEncoding;
+        tx.anisotropy = 4;
+        mat[k] = iso[k] = tx; one();
+      }, undefined, one);
     });
-    group.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    return group;
-  }
-
-  root.AVATAR_HEAD = { build, smooth, noise, lin };
-})(window);
-
-
-/* ===== Rigged body (from MotionRx), trainers added ===== */
-(function (root) {
-  const T = root.THREE;
-  const rad = d => d * Math.PI / 180;
-  const lin = c => new T.Color(c).convertSRGBToLinear();
-
-  function smoothInterp(cs, t) {
-    const f = t * (cs.length - 1), i = Math.min(cs.length - 2, Math.floor(f)), u = f - i;
-    const w = (1 - Math.cos(u * Math.PI)) / 2;
-    return cs[i] * (1 - w) + cs[i + 1] * w;
-  }
-  // Tapered capsule hanging down from the origin along -Y
-  function limbGeo(len, cs, opts = {}) {
-    const pts = [], N = 26, rb = cs[cs.length - 1], rt = cs[0];
-    if (opts.capBot !== false) for (let k = 0; k <= 7; k++) { const a = -Math.PI / 2 + k / 7 * Math.PI / 2; pts.push(new T.Vector2(Math.max(1e-4, rb * Math.cos(a)), -len + rb * Math.sin(a))); }
-    for (let i = N - 1; i >= 1; i--) { const t = i / N; pts.push(new T.Vector2(smoothInterp(cs, t), -len * t)); }
-    if (opts.capTop !== false) for (let k = 0; k <= 7; k++) { const a = k / 7 * Math.PI / 2; pts.push(new T.Vector2(Math.max(1e-4, rt * Math.cos(a)), rt * Math.sin(a))); }
-    else pts.push(new T.Vector2(rt, 0));
-    return new T.LatheGeometry(pts, opts.seg || 36);
-  }
-  function lathe(points, seg = 48) { return new T.LatheGeometry(points.map(p => new T.Vector2(Math.max(1e-4, p[0]), p[1])), seg); }
-  function ell(r, sx, sy, sz, mat, ws = 32, hs = 24) { const m = new T.Mesh(new T.SphereGeometry(r, ws, hs), mat); m.scale.set(sx, sy, sz); return m; }
-  function add(parent, mesh, x = 0, y = 0, z = 0) { mesh.position.set(x, y, z); parent.add(mesh); return mesh; }
-
-  // Tiling detail textures (skin pores and mottling, fabric knit)
-  function tileTex(size, fn, srgb) {
-    const c = document.createElement('canvas'); c.width = c.height = size;
-    const ctx = c.getContext('2d'), im = ctx.createImageData(size, size);
-    for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) { const v = fn(i / size, j / size), k = (j * size + i) * 4; im.data[k] = v[0]; im.data[k + 1] = v[1]; im.data[k + 2] = v[2]; im.data[k + 3] = 255; }
-    ctx.putImageData(im, 0, 0);
-    const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; if (srgb) t.encoding = T.sRGBEncoding; t.anisotropy = 4; return t;
-  }
-  // periodic noise so tiles have no seams
-  function pnoise(u, v, f) {
-    const N = AVATAR_HEAD.noise, a = u * Math.PI * 2, b = v * Math.PI * 2;
-    return N(Math.cos(a) * f, Math.sin(a) * f, Math.cos(b) * f + Math.sin(b) * f * 0.7 + 11.3);
+    return { mat, iso };
   }
 
   function build() {
-    const SKIN = 0xb57454;
-    const skinCol = tileTex(256, (u, v) => {
-      const n = pnoise(u, v, 3) - 0.5, m = pnoise(u, v, 9) - 0.5;
-      return [181 + 9 * n + 4 * m, 116 + 7 * n + 3 * m, 84 + 5 * n + 2 * m];
-    }, true);
-    const skinBump = tileTex(256, (u, v) => { const n = 128 + 50 * (pnoise(u, v, 60) - 0.5) + 40 * (pnoise(u, v, 140) - 0.5); return [n, n, n]; });
-    const knit = tileTex(128, (u, v) => {
-      const rib = Math.sin(u * Math.PI * 2 * 32) * 0.5 + 0.5, row = Math.sin(v * Math.PI * 2 * 48) * 0.5 + 0.5;
-      const n = 128 + 70 * (rib * 0.6 + row * 0.4 - 0.5) + 40 * (pnoise(u, v, 30) - 0.5); return [n, n, n];
-    });
-    const fabric = (col, rough, sheenCol) => new T.MeshPhysicalMaterial({ color: lin(col), roughness: rough, sheen: lin(sheenCol), bumpMap: knit, bumpScale: 0.0006, side: T.DoubleSide });
-    const skinMat = (rep) => {
-      const m = new T.MeshPhysicalMaterial({ color: lin(SKIN), roughness: 0.55, bumpMap: skinBump.clone(), bumpScale: 0.0004, sheen: lin(0x3a1a10), clearcoat: 0.05, clearcoatRoughness: 0.6 });
-      [m.bumpMap].forEach(t => { t.needsUpdate = true; t.repeat.set(rep[0], rep[1]); });
-      return m;
-    };
-    const mats = {
-      skin: skinMat([3, 4]), skinHand: skinMat([2, 2]),
-      shirt: fabric(0x1f2024, 0.86, 0x3a3d44),
-      shorts: fabric(0x18191c, 0.8, 0x34373e),
-      rib: fabric(0x141518, 0.9, 0x2d3036),
-      shoe: new T.MeshPhysicalMaterial({ color: lin(0x2b2f36), roughness: 0.62, sheen: lin(0x30343b), bumpMap: knit, bumpScale: 0.0005 }),
-      shoeTrim: new T.MeshPhysicalMaterial({ color: lin(0x3f454f), roughness: 0.4, clearcoat: 0.3 }),
-      sole: new T.MeshPhysicalMaterial({ color: lin(0xc9cdd2), roughness: 0.75 }),
-      lace: new T.MeshStandardMaterial({ color: lin(0x1c1e22), roughness: 0.9 }),
-      band: new T.MeshPhysicalMaterial({ color: lin(0x111214), roughness: 0.95, sheen: lin(0x2a2c30), bumpMap: knit, bumpScale: 0.0008 }),
-      nail: new T.MeshPhysicalMaterial({ color: lin(0xd9aa94), roughness: 0.3, clearcoat: 0.6 }),
-      metal: new T.MeshStandardMaterial({ color: lin(0xb9bec4), roughness: 0.28, metalness: 1 }),
-      iron: new T.MeshStandardMaterial({ color: lin(0x26292e), roughness: 0.5, metalness: 0.7 })
-    };
+    const D = root.SOPHIA_MODEL;
+    if (!D) throw new Error('sophia-model.js is not loaded');
+    const S = rest(D), A = S.Ap;
+    const B = k => S.ix[k];
+    const rel = (k, pk) => A[B(k)].clone().sub(A[B(pk)]);
+    const grp = (parent, pos, order) => { const g = new T.Group(); g.position.copy(pos); if (order) g.rotation.order = order; parent.add(g); return g; };
+
+    /* ---- the rig: joints on Sophia's joints, names and axes as before ---- */
     const J = {};
-    const root = new T.Group(); root.name = 'avatar';
-    const hips = new T.Group(); root.add(hips); J.hips = hips;
-
-    // ---- pelvis / shorts
-    const pelvis = new T.Mesh(lathe([[0.0, -0.062], [0.1, -0.058], [0.15, -0.035], [0.163, 0.0], [0.163, 0.04], [0.156, 0.1], [0.0, 0.1]]), mats.shorts);
-    pelvis.scale.set(1.13, 1, 0.78); hips.add(pelvis);
-    add(hips, ell(0.075, 1.25, 0.8, 0.7, mats.shorts), 0, -0.035, -0.07); // seat
-    const waist = new T.Mesh(new T.CylinderGeometry(0.156, 0.158, 0.035, 48, 1, true), mats.rib);
-    waist.scale.set(1.13, 1, 0.79); add(hips, waist, 0, 0.083, 0);
-
-    // ---- torso (athletic tee)
-    const spine = new T.Group(); spine.position.set(0, 0.07, 0); spine.rotation.order = 'YXZ'; hips.add(spine); J.spine = spine;
-    const torso = new T.Mesh(lathe([[0.0, -0.025], [0.149, -0.025], [0.15, 0.06], [0.156, 0.16], [0.172, 0.27], [0.184, 0.36], [0.18, 0.41], [0.16, 0.45], [0.115, 0.485], [0.07, 0.502], [0.0, 0.506]]), mats.shirt);
-    torso.scale.set(1.13, 1, 0.64); spine.add(torso);
-    [-1, 1].forEach(sg => {
-      add(spine, ell(0.085, 1.05, 0.62, 0.5, mats.shirt), sg * 0.07, 0.36, 0.06);   // pecs
-      add(spine, ell(0.085, 1.0, 0.95, 0.45, mats.shirt), sg * 0.075, 0.34, -0.055); // lats / scapula
-      const trap = ell(0.06, 1.6, 0.45, 0.85, mats.shirt); trap.rotation.z = sg * -0.36; add(spine, trap, sg * 0.105, 0.455, -0.012);
-    });
-    const collar = new T.Mesh(lathe([[0.083, -0.012], [0.08, -0.004], [0.072, 0.006], [0.0665, 0.012]]), mats.rib);
-    collar.scale.set(1.08, 1, 0.92); collar.rotation.x = -0.12; add(spine, collar, 0, 0.497, 0.006);
-
-    // ---- neck & head
-    const neck = new T.Group(); neck.position.set(0, 0.5, 0); neck.rotation.order = 'YXZ'; spine.add(neck); J.neck = neck;
-    const neckMesh = new T.Mesh(limbGeo(0.07, [0.056, 0.059, 0.068]), mats.skin); neckMesh.scale.set(1.02, 1, 0.9); neckMesh.rotation.x = -0.12; add(neck, neckMesh, 0, 0.07, 0.004);
-    const head = new T.Group(); head.position.set(0, 0.128, 0.016); neck.add(head); J.head = head;
-    head.add(AVATAR_HEAD.build(lin(SKIN)));
-
-    // ---- arms & hands
-    J.fingers = { L: [], R: [] }; J.thumb = {}; J.dumbbell = {};
-    const FING = [[0.026, [0.041, 0.025, 0.021]], [0.009, [0.045, 0.028, 0.023]], [-0.008, [0.043, 0.027, 0.022]], [-0.024, [0.034, 0.021, 0.019]]];
+    const avRoot = new T.Group(); avRoot.name = 'avatar';
+    const hips = grp(avRoot, new T.Vector3()); J.hips = hips;
+    const spine = grp(hips, A[B('spine_01')], 'YXZ'); J.spine = spine;
+    const neck = grp(spine, rel('neck', 'spine_01'), 'YXZ'); J.neck = neck;
+    J.head = grp(neck, rel('head', 'neck'));
+    J.fingers = { L: [], R: [] }; J.thumb = {};
     ['L', 'R'].forEach(s => {
-      const sg = s === 'L' ? 1 : -1, px = -sg;
-      const ua = new T.Group(); ua.position.set(sg * 0.192, 0.418, -0.005); ua.rotation.order = 'ZXY'; spine.add(ua); J[s + '_upperArm'] = ua;
-      add(ua, ell(0.057, 1.05, 1.15, 1.0, mats.shirt), sg * 0.004, -0.03, 0); // deltoid under sleeve
-      add(ua, new T.Mesh(limbGeo(0.29, [0.047, 0.051, 0.048, 0.041, 0.036]), mats.skin));
-      add(ua, ell(0.03, 1, 1.9, 1.05, mats.skin), 0, -0.155, 0.017);  // biceps
-      add(ua, ell(0.031, 1.02, 2.0, 0.95, mats.skin), 0, -0.13, -0.016); // triceps
-      ua.add(new T.Mesh(lathe([[0.058, -0.16], [0.06, -0.1], [0.062, -0.04], [0.056, 0.015], [0.036, 0.048], [0.0, 0.058]]), mats.shirt));
-      add(ua, new T.Mesh(new T.TorusGeometry(0.0595, 0.0028, 8, 40), mats.rib), 0, -0.158, 0).rotation.x = Math.PI / 2;
-
-      const fa = new T.Group(); fa.position.set(0, -0.29, 0); fa.rotation.order = 'XYZ'; ua.add(fa); J[s + '_forearm'] = fa;
-      add(fa, new T.Mesh(limbGeo(0.258, [0.037, 0.042, 0.037, 0.029, 0.025]), mats.skin));
-      add(fa, ell(0.027, 1.1, 2.3, 1.0, mats.skin), sg * 0.008, -0.06, 0.006); // brachioradialis
-      const band = new T.Mesh(lathe([[0.0285, -0.024], [0.0305, -0.02], [0.031, 0.02], [0.0295, 0.024]]), mats.band); add(fa, band, 0, -0.218, 0);
-
-      const hand = new T.Group(); hand.position.set(0, -0.258, 0); fa.add(hand); J[s + '_hand'] = hand;
-      const palm = ell(1, 0.0155, 0.05, 0.04, mats.skinHand, 32, 24); add(hand, palm, px * 0.001, -0.05, 0.001);
-      add(hand, ell(1, 0.014, 0.022, 0.016, mats.skinHand), px * 0.007, -0.047, 0.022);   // thenar
-      add(hand, ell(1, 0.012, 0.026, 0.012, mats.skinHand), px * 0.005, -0.06, -0.026);   // hypothenar
-      FING.forEach(([z, L], i) => {
-        const r0 = [0.0092, 0.0095, 0.009, 0.008][i];
-        const f1 = new T.Group(); f1.position.set(0, -0.092, z); f1.rotation.order = 'XYZ'; hand.add(f1);
-        f1.add(new T.Mesh(limbGeo(L[0], [r0, r0 * 0.9], { seg: 16 }), mats.skinHand));
-        add(f1, ell(r0 * 1.05, 1, 1, 1, mats.skinHand, 16, 12), 0, 0, 0); // knuckle
-        const f2 = new T.Group(); f2.position.set(0, -L[0], 0); f1.add(f2);
-        f2.add(new T.Mesh(limbGeo(L[1], [r0 * 0.88, r0 * 0.8], { seg: 16 }), mats.skinHand));
-        const f3 = new T.Group(); f3.position.set(0, -L[1], 0); f2.add(f3);
-        f3.add(new T.Mesh(limbGeo(L[2], [r0 * 0.78, r0 * 0.7], { seg: 16 }), mats.skinHand));
-        const nail = ell(1, 0.0018, L[2] * 0.36, r0 * 0.62, mats.nail, 16, 12); add(f3, nail, -px * r0 * 0.66, -L[2] * 0.62, 0);
+      const sd = s.toLowerCase(), sg = s === 'L' ? 1 : -1, px = -sg;
+      const ua = grp(spine, rel('upperarm_' + sd, 'spine_01'), 'ZXY'); J[s + '_upperArm'] = ua;
+      const fa = grp(ua, rel('lowerarm_' + sd, 'upperarm_' + sd), 'XYZ'); J[s + '_forearm'] = fa;
+      const hand = grp(fa, rel('hand_' + sd, 'lowerarm_' + sd)); J[s + '_hand'] = hand;
+      FING.forEach((f, i) => {
+        const f1 = grp(hand, rel(f + '_01_' + sd, 'hand_' + sd), 'XYZ');
+        const f2 = grp(f1, rel(f + '_02_' + sd, f + '_01_' + sd));
+        const f3 = grp(f2, rel(f + '_03_' + sd, f + '_02_' + sd));
         J.fingers[s].push({ f1, f2, f3, spreadK: [-1.3, -0.4, 0.4, 1.3][i] });
       });
-      // thumb: two phalanges placed by explicit kinematics in applyPose
-      const t1 = new T.Group(), t2 = new T.Group(); hand.add(t1); hand.add(t2);
-      t1.add(new T.Mesh(limbGeo(0.033, [0.0115, 0.0102], { seg: 16 }), mats.skinHand));
-      t2.add(new T.Mesh(limbGeo(0.029, [0.0098, 0.0082], { seg: 16 }), mats.skinHand));
-      add(t2, ell(1, 0.0019, 0.0105, 0.0068, mats.nail, 16, 12), -px * 0.0072, -0.018, 0);
+      const t1 = new T.Group(), t2 = new T.Group(); hand.add(t1); hand.add(t2);   // placed by applyPose
       J.thumb[s] = { t1, t2, px };
-      const db = new T.Group(); db.position.set(px * 0.03, -0.085, -0.002); hand.add(db);
-      const handle = new T.Mesh(new T.CylinderGeometry(0.0135, 0.0135, 0.15, 20), mats.metal); handle.rotation.x = Math.PI / 2; db.add(handle);
-      [-1, 1].forEach(e => { const pl = new T.Mesh(new T.CylinderGeometry(0.043, 0.043, 0.045, 6), mats.iron); pl.rotation.x = Math.PI / 2; pl.position.z = e * 0.088; db.add(pl); });
-      db.visible = false; J.dumbbell[s] = db;
-      // soft therapy ball for the finger squeeze, held in the palm
-      J.ball = J.ball || {};
-      const ball = new T.Mesh(new T.SphereGeometry(0.031, 32, 24), new T.MeshPhysicalMaterial({ color: lin(0x5b8db0), roughness: 0.55, sheen: lin(0x9cc4de), clearcoat: 0.2 }));
-      ball.position.set(px * 0.036, -0.085, 0.004); ball.castShadow = true; ball.visible = false; hand.add(ball); J.ball[s] = ball;
-
-      // ---- legs
-      const th = new T.Group(); th.position.set(sg * 0.093, -0.03, 0); th.rotation.order = 'ZXY'; hips.add(th); J[s + '_thigh'] = th;
-      const thighMesh = new T.Mesh(limbGeo(0.44, [0.088, 0.086, 0.078, 0.065, 0.054, 0.0488, 0.0475]), mats.skin);
-      thighMesh.scale.set(1, 1, 0.95); th.add(thighMesh);
-      const patella = ell(0.021, 1.0, 1.15, 0.55, mats.skin); add(th, patella, 0, -0.438, 0.035);  // kneecap
-      th.add(new T.Mesh(lathe([[0.094, -0.25], [0.091, -0.16], [0.092, -0.05], [0.092, 0.03], [0.088, 0.075]]), mats.shorts));
-      add(th, new T.Mesh(new T.TorusGeometry(0.0935, 0.0026, 8, 44), mats.rib), 0, -0.248, 0).rotation.x = Math.PI / 2;
-      const shin = new T.Group(); shin.position.set(0, -0.44, 0); th.add(shin); J[s + '_shin'] = shin;
-      const shinMesh = new T.Mesh(limbGeo(0.43, [0.0475, 0.0478, 0.0485, 0.045, 0.038, 0.0325, 0.029]), mats.skin);
-      shinMesh.scale.set(1, 1, 0.95); shin.add(shinMesh);
-      const calf = ell(0.044, 1.0, 2.4, 0.95, mats.skin); add(shin, calf, -sg * 0.004, -0.13, -0.017); // calf
-      const calfIn = ell(0.03, 1.0, 2.2, 0.9, mats.skin); add(shin, calfIn, -sg * 0.012, -0.11, -0.02);  // inner calf head
-      const foot = new T.Group(); foot.position.set(0, -0.43, 0); shin.add(foot); J[s + '_foot'] = foot;
-      buildTrainer(foot, sg, mats);
-      J[s + '_footPts'] = { heel: new T.Vector3(0, -0.097, -0.075), toe: new T.Vector3(0, -0.097, 0.188), ball: new T.Vector3(0, -0.097, 0.12) };
+      const th = grp(hips, A[B('upperleg_' + sd)], 'ZXY'); J[s + '_thigh'] = th;
+      const shin = grp(th, rel('lowerleg_' + sd, 'upperleg_' + sd)); J[s + '_shin'] = shin;
+      J[s + '_foot'] = grp(shin, rel('foot_' + sd, 'lowerleg_' + sd));
     });
 
-    root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    return { root, J, mats };
-  }
+    /* ---- the skinned mesh ---- */
+    const d = decode(D);
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.BufferAttribute(d.pos, 3));
+    geo.setAttribute('normal', new T.BufferAttribute(d.nrm, 3, true));
+    geo.setAttribute('uv', new T.BufferAttribute(d.uv, 2, true));
+    geo.setAttribute('skinIndex', new T.BufferAttribute(d.si, 4));
+    geo.setAttribute('skinWeight', new T.BufferAttribute(d.sw, 4, true));
+    geo.setIndex(new T.BufferAttribute(d.idx, 1));
+    const bones = [];
+    for (let i = 0; i < S.n; i++) {
+      const b = new T.Bone(); b.name = S.name[i]; b.matrixAutoUpdate = false;
+      b.matrix.compose(A[i], S.Aq[i], new T.Vector3(SCALE, SCALE, SCALE));
+      avRoot.add(b); bones.push(b);
+    }
+    const skeleton = new T.Skeleton(bones, S.inv);
+    let ready;
+    const readyP = new Promise(ok => { ready = ok; });
+    const mats = material(D, ready);
+    const mesh = new T.SkinnedMesh(geo, mats.mat);
+    mesh.name = 'sophia'; mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = true;
+    avRoot.add(mesh);
+    mesh.bind(skeleton, new T.Matrix4());
 
-  // Dark trainers (character sheet): knit upper, light sole, heel counter, padded collar and laces.
-  // Built in the foot group's frame: ankle at the origin, ground contact at y = -0.097 (as the bare foot was).
-  function buildTrainer(foot, sg, mats) {
-    const prof = (zs, vs, z) => { if (z <= zs[0]) return vs[0]; for (let i = 1; i < zs.length; i++) if (z <= zs[i]) { const u = (z - zs[i - 1]) / (zs[i] - zs[i - 1]), w = (1 - Math.cos(u * Math.PI)) / 2; return vs[i - 1] * (1 - w) + vs[i] * w; } return vs[vs.length - 1]; };
-    // shape a sphere into a shoe-like volume: per-z half width, top and bottom heights
-    function shaped(zs, halfW, topY, botY, flat, seg) {
-      const Z0 = zs[0], Z1 = zs[zs.length - 1], ZC = (Z0 + Z1) / 2, ZL = (Z1 - Z0) / 2;
-      const geo = new T.SphereGeometry(1, seg || 56, 36), pos = geo.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const dx = pos.getX(i), dy = pos.getY(i), dz = pos.getZ(i);
-        const z = ZC + ZL * Math.sign(dz) * Math.pow(Math.abs(dz), 0.7);
-        const w = prof(zs, halfW, z), top = prof(zs, topY, z), bot = typeof botY === 'number' ? botY : prof(zs, botY, z);
-        const mid = (top + bot) / 2, half = (top - bot) / 2;
-        const yy = dy < 0 ? -Math.pow(-dy, flat) : Math.pow(dy, dy > 0 ? 0.8 : 1);
-        const outer = 1 + 0.06 * Math.max(0, dx * sg);
-        pos.setXYZ(i, Math.sign(dx) * Math.pow(Math.abs(dx), 0.85) * w * outer, mid + half * yy, z);
+    // strongest bone of each vertex, and her rest-pose vertices (for the feet)
+    const nv = d.pos.length / 3, dom = new Uint8Array(nv);
+    for (let v = 0; v < nv; v++) { let best = 0; for (let k = 1; k < 4; k++) if (d.sw[v * 4 + k] > d.sw[v * 4 + best]) best = k; dom[v] = d.si[v * 4 + best]; }
+    const G = bones.map((b, i) => new T.Matrix4().multiplyMatrices(b.matrix, S.inv[i]));
+    const _v = new T.Vector3(), _w = new T.Vector3();
+    const restVert = (v, out) => {
+      out.set(0, 0, 0);
+      for (let k = 0; k < 4; k++) {
+        const w = d.sw[v * 4 + k] / 255; if (!w) continue;
+        _w.set(d.pos[v * 3], d.pos[v * 3 + 1], d.pos[v * 3 + 2]).applyMatrix4(G[d.si[v * 4 + k]]);
+        out.addScaledVector(_w, w);
       }
-      geo.computeVertexNormals();
-      return geo;
+      return out;
+    };
+
+    /* ---- foot contact points (ankle frame) from her shoes ---- */
+    ['L', 'R'].forEach(s => {
+      const sd = s.toLowerCase(), set = new Set([B('foot_' + sd), B('ball_' + sd)]), ank = A[B('foot_' + sd)];
+      let sole = Infinity, heel = Infinity, toe = -Infinity;
+      for (let v = 0; v < nv; v++) {
+        if (!set.has(dom[v])) continue;
+        restVert(v, _v).sub(ank);
+        sole = Math.min(sole, _v.y); heel = Math.min(heel, _v.z); toe = Math.max(toe, _v.z);
+      }
+      const ball = A[B('ball_' + sd)].z - ank.z;
+      J[s + '_footPts'] = {
+        heel: new T.Vector3(0, sole, heel), toe: new T.Vector3(0, sole, toe), ball: new T.Vector3(0, sole, ball),
+        mid: new T.Vector3(0, sole, (heel + ball) / 2), tip: new T.Vector3(0, sole + 0.006, toe - 0.012)
+      };
+    });
+    /* her shoulder → fingertip reach against the old character's (wall distance) */
+    J.reachK = A[B('middle_end_r')].distanceTo(A[B('upperarm_r')]) / OLD_REACH;
+
+    /* ---- isolated close-ups: the same skin, only the triangles of one limb ---- */
+    const below = name => {
+      const set = new Set([B(name)]);
+      for (let i = 0; i < S.n; i++) if (set.has(S.par[i])) set.add(i);
+      return set;
+    };
+    const ISO_BONE = { R_forearm: 'lowerarm_r', L_forearm: 'lowerarm_l' };
+    const isoMeshes = {};
+    function isoMesh(j) {
+      if (isoMeshes[j]) return isoMeshes[j];
+      const set = below(ISO_BONE[j]), keep = [];
+      for (let f = 0; f < d.idx.length; f += 3) {
+        const a = d.idx[f], b = d.idx[f + 1], c = d.idx[f + 2];
+        if (set.has(dom[a]) && set.has(dom[b]) && set.has(dom[c])) keep.push(a, b, c);
+      }
+      const g = geo.clone(); g.setIndex(keep);
+      const m = new T.SkinnedMesh(g, mats.iso);
+      m.frustumCulled = false; m.castShadow = m.receiveShadow = true; m.visible = false;
+      avRoot.add(m); m.bind(skeleton, new T.Matrix4());
+      return (isoMeshes[j] = m);
     }
-    const zs = [-0.102, -0.07, -0.02, 0.04, 0.095, 0.14, 0.178];
-    // upper: knit body rising to the collar at the heel and the tongue at the instep
-    const upper = new T.Mesh(shaped(zs, [0.031, 0.039, 0.04, 0.042, 0.048, 0.049, 0.04],
-      [-0.012, 0.004, 0.022, -0.02, -0.05, -0.066, -0.076], -0.086, 0.35), mats.shoe);
-    foot.add(upper);
-    // midsole / outsole: a light slab that wraps a little up the sides, slight toe spring
-    const sole = new T.Mesh(shaped([-0.106, -0.07, -0.02, 0.04, 0.095, 0.14, 0.184], [0.034, 0.042, 0.042, 0.044, 0.051, 0.052, 0.043],
-      [-0.08, -0.081, -0.082, -0.083, -0.083, -0.081, -0.074], [-0.104, -0.104, -0.104, -0.104, -0.104, -0.102, -0.095], 0.25), mats.sole);
-    foot.add(sole);
-    const tread = new T.Mesh(shaped([-0.104, -0.07, -0.02, 0.04, 0.095, 0.14, 0.182], [0.033, 0.041, 0.041, 0.043, 0.05, 0.051, 0.042],
-      [-0.1, -0.1, -0.1, -0.1, -0.1, -0.099, -0.093], [-0.106, -0.106, -0.106, -0.106, -0.106, -0.104, -0.097], 0.25), mats.lace);
-    foot.add(tread);
-    // heel counter
-    const counter = new T.Mesh(new T.SphereGeometry(1, 32, 16, Math.PI * 0.62, Math.PI * 0.76, Math.PI * 0.35, Math.PI * 0.4), mats.shoeTrim);
-    counter.scale.set(0.034, 0.05, 0.036); counter.position.set(0, -0.052, -0.07); foot.add(counter);
-    // padded collar round the ankle
-    const collar = new T.Mesh(new T.TorusGeometry(0.036, 0.0075, 10, 40), mats.shoe);
-    collar.rotation.x = Math.PI / 2 + 0.22; collar.scale.set(0.92, 1.18, 1); collar.position.set(0, 0.002, -0.03); foot.add(collar);
-    // tongue and laces across the instep
-    const tongue = ell(1, 0.02, 0.006, 0.05, mats.shoeTrim, 20, 12); tongue.rotation.x = 0.62; add(foot, tongue, 0, -0.012, 0.03);
-    for (let k = 0; k < 4; k++) {
-      const z = 0.012 + k * 0.022, y = -0.018 - k * 0.0135;
-      const lace = new T.Mesh(new T.BoxGeometry(0.036 - k * 0.002, 0.0024, 0.0042), mats.lace);
-      lace.position.set(0, y + 0.004, z); lace.rotation.x = 0.55; foot.add(lace);
+    function setIso(j) {
+      mesh.visible = !j;
+      Object.keys(isoMeshes).forEach(k => { isoMeshes[k].visible = false; });
+      if (j && ISO_BONE[j]) isoMesh(j).visible = true;
+      else mesh.visible = true;
     }
-    // side stripe
-    const stripe = new T.Mesh(new T.TorusGeometry(0.06, 0.0022, 6, 30, Math.PI * 0.5), mats.shoeTrim);
-    stripe.rotation.set(0, sg * Math.PI / 2, Math.PI * 0.08); stripe.position.set(sg * 0.044, -0.088, 0.03); foot.add(stripe);
-    const stripe2 = stripe.clone(); stripe2.position.x = -sg * 0.042; foot.add(stripe2);
+
+    const av = { root: avRoot, J, mesh, skeleton, bones, S, setIso, ready: () => readyP };
+    av.links = links(S).map(l => Object.assign(l, { joint: jointOf(J, l), q: new T.Quaternion(), restInv: new T.Quaternion() }));
+
+    // the rig's zero pose is Sophia's rest pose: remember each joint's rest rotation
+    const zero = { neckFlex: 0, neckRot: 0, neckLat: 0, trunkFlex: 0, trunkRot: 0, trunkLat: 0 };
+    root.AVATAR.applyPose(J, zero);
+    avRoot.updateMatrixWorld(true);
+    av.links.forEach(l => { relQ(av, l.joint, l.restInv); l.restInv.invert(); });
+    return av;
   }
 
-  // Bare foot: one sculpted mesh for heel, arch and forefoot, plus five toes with joints and toenails
-  function buildFoot(foot, sg, mats) {
-    const sm = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
-    const prof = (zs, vs, z) => { if (z <= zs[0]) return vs[0]; for (let i = 1; i < zs.length; i++) if (z <= zs[i]) { const u = (z - zs[i - 1]) / (zs[i] - zs[i - 1]), w = (1 - Math.cos(u * Math.PI)) / 2; return vs[i - 1] * (1 - w) + vs[i] * w; } return vs[vs.length - 1]; };
-    const Z0 = -0.088, Z1 = 0.158, ZC = (Z0 + Z1) / 2, ZL = (Z1 - Z0) / 2;
-    const zs = [-0.088, -0.05, -0.01, 0.04, 0.09, 0.125, 0.158];
-    const halfW = [0.024, 0.031, 0.032, 0.034, 0.04, 0.044, 0.041];
-    const topY = [-0.058, -0.014, 0.014, -0.03, -0.058, -0.072, -0.078];
-    const geo = new T.SphereGeometry(1, 64, 40);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const dx = pos.getX(i), dy = pos.getY(i), dz = pos.getZ(i);
-      const z = ZC + ZL * Math.sign(dz) * Math.pow(Math.abs(dz), 0.8);
-      const w = prof(zs, halfW, z), top = prof(zs, topY, z);
-      const medial = sm(0, -0.8, dx * sg);           // inner edge of the foot
-      const arch = 0.011 * Math.exp(-Math.pow((z - 0.035) / 0.05, 2)) * medial;
-      const bot = -0.097 + arch;
-      const mid = (top + bot) / 2, half = (top - bot) / 2;
-      const yy = dy < 0 ? -Math.pow(-dy, 0.45) : dy;   // flatter sole
-      const outer = 1 + 0.08 * Math.max(0, dx * sg);  // slightly wider outer edge
-      pos.setXYZ(i, dx * w * outer + sg * 0.002 * (z - 0.04) / 0.1, mid + half * yy, z);
-    }
-    geo.computeVertexNormals();
-    foot.add(new T.Mesh(geo, mats.skin));
-    // ankle: bridge into the shin, inner and outer ankle bones, achilles
-    add(foot, ell(0.0075, 0.8, 1.3, 1, mats.skin, 18, 14), sg * 0.0205, -0.016, -0.006);
-    add(foot, ell(0.007, 0.8, 1.3, 1, mats.skin, 18, 14), -sg * 0.0195, -0.01, -0.003);
-    add(foot, ell(1, 0.011, 0.04, 0.01, mats.skin), 0, -0.022, -0.02);
-    // toes: [x, base z, radius, proximal length, distal length, splay]
-    const TOES = [[-0.024, 0.15, 0.0118, 0.022, 0.019, -0.06], [-0.002, 0.152, 0.0085, 0.017, 0.013, 0.0],
-      [0.0135, 0.146, 0.0081, 0.015, 0.012, 0.05], [0.0275, 0.137, 0.0076, 0.013, 0.011, 0.1], [0.04, 0.125, 0.0071, 0.011, 0.01, 0.16]];
-    const toenail = new T.MeshPhysicalMaterial({ color: lin(0xc9967f), roughness: 0.45, clearcoat: 0.3 });
-    TOES.forEach(([x, z0, r, l1, l2, splay]) => {
-      const t1 = new T.Group(); t1.position.set(sg * x, -0.097 + r * 0.85 + 0.0008, z0); t1.rotation.set(-Math.PI / 2 + 0.06, sg * splay, 0); t1.scale.set(1.08, 1, 0.85); foot.add(t1);
-      t1.add(new T.Mesh(limbGeo(l1, [r, r * 0.93], { seg: 18 }), mats.skinHand));
-      add(t1, ell(r * 1.08, 1, 1, 1, mats.skinHand, 18, 14), 0, 0, 0); // joint at the ball of the foot
-      const t2 = new T.Group(); t2.position.set(0, -l1, 0); t2.rotation.x = 0.14; t1.add(t2);
-      t2.add(new T.Mesh(limbGeo(l2, [r * 0.93, r * 0.86], { seg: 18 }), mats.skinHand));
-      add(t2, ell(1, r * 0.72, l2 * 0.42, 0.0017, toenail, 16, 12), 0, -l2 * 0.6, r * 0.8);
-      add(t2, ell(1, r * 0.95, l2 * 0.38, r * 0.7, mats.skinHand, 16, 12), 0, -l2 * 0.55, -r * 0.18); // toe pad
-    });
+  const _ri = new T.Matrix4(), _m = new T.Matrix4(), _pp = new T.Vector3(), _ss = new T.Vector3();
+  function relQ(av, joint, out) {
+    _ri.copy(av.root.matrixWorld).invert();
+    _m.multiplyMatrices(_ri, joint.matrixWorld).decompose(_pp, out, _ss);
+    return out;
   }
+
+  /* ---- every frame: Sophia's bones follow the posed rig ---- */
+  const _q = new T.Quaternion(), _d = new T.Quaternion(), _d2 = new T.Quaternion(), _tw = new T.Quaternion();
+  const _Y = new T.Vector3(0, 1, 0), _sc = new T.Vector3(SCALE, SCALE, SCALE);
+  function sync(av, pose) {
+    const { S, bones, links, J } = av;
+    av.root.updateMatrixWorld(true);
+    const Wq = av._wq || (av._wq = S.Aq.map(() => new T.Quaternion()));
+    const Wp = av._wp || (av._wp = S.Ap.map(() => new T.Vector3()));
+    const drive = av._drive || (av._drive = (() => { const m = {}; links.forEach(l => { m[l.i] = l; }); return m; })());
+    const byJoint = new Map();
+    links.forEach(l => {
+      if (!byJoint.has(l.joint)) byJoint.set(l.joint, relQ(av, l.joint, new T.Quaternion()));
+      l.q.copy(byJoint.get(l.joint));
+    });
+    const hipPos = J.hips.position;
+    for (let i = 0; i < S.n; i++) {
+      const p = S.par[i], l = drive[i];
+      if (l) {
+        _d.copy(l.q);
+        if (l.twist) _d.multiply(_tw.setFromAxisAngle(_Y, l.sg * (pose[l.side + '_pron'] || 0) * Math.PI / 180 * l.twist));
+        _d.multiply(l.restInv);
+        if (l.mix) {
+          const o = links.find(x => x.thumb && x.thumb[0] === l.mix.thumb && x.thumb[1] === l.mix.part);
+          _d2.copy(o.q).multiply(o.restInv);
+          _d.slerp(_d2, l.mix.w);
+        }
+        Wq[i].copy(_d).multiply(S.Aq[i]);
+      } else if (p < 0) Wq[i].copy(S.Aq[i]);
+      else Wq[i].copy(Wq[p]).multiply(S.rq[i]);
+      if (p < 0) Wp[i].copy(S.Ap[i]);
+      else if (S.name[i] === 'hip') Wp[i].copy(hipPos);
+      else Wp[i].copy(S.t[i]).applyQuaternion(Wq[p]).add(Wp[p]);
+      bones[i].matrix.compose(Wp[i], Wq[i], _sc);
+    }
+    av.root.updateMatrixWorld(true);
+  }
+
+  root.SOPHIA_AVATAR = { build, sync };
+})(window);
+
+
+/* ===== Rig pose, grounding (from MotionRx) ===== */
+(function (root) {
+  const T = root.THREE;
+  const rad = d => d * Math.PI / 180;
+
+  function build() { return root.SOPHIA_AVATAR.build(); }
 
   const _a = new T.Vector3(), _b = new T.Vector3(), _down = new T.Vector3(0, -1, 0);
   function applyPose(J, p) {
@@ -588,7 +474,6 @@
   const rad = d => d * Math.PI / 180;
   const lin = c => new T.Color(c).convertSRGBToLinear();
 
-  const HEAD_SCALE = 1.18;
   /* sign that turns a wanted wrist angle into the rig's wrFlex with the palm down (solved numerically) */
   const WRIST_LEVEL = -1;
 
@@ -609,15 +494,15 @@
    *          changed or re-scaled here: `th` is the angle the marks show).
    *  Output: pose   joint values in the rig's terms (degrees)
    *          hipTilt pelvis tilt inside the rig (squat only, see below)
-   *          view   'front' | 'side'  — same view as the 2D figure
-   *          anchor rig joint that must sit on the 2D figure's mark pivot,
+   *          view   'front' | 'side'  — the view the marks are drawn for
+   *          anchor rig joint that must sit on the marks' pivot,
    *                 `at` is that pivot in the figure's 200x200 space,
    *                 `scale` is figure units per metre.
    *
    *  Rig conventions handled here: the rig faces +Z; its L side is +X.
    *  Front view looks from +Z so the figure mirrors the patient (screen
    *  right = rig L), side view looks from -X so the figure faces screen right,
-   *  as the 2D figures do. Screen directions in ReMotion therefore map to:
+   *  as the marks expect. Screen directions in ReMotion therefore map to:
    *      neckRot  +  = face turns to screen right
    *      neckLat  +  = ear goes to screen right
    *      neckFlex +  = chin down (forward)
@@ -663,7 +548,7 @@
         break;
       case 'squat': {
         /* The body arrangement comes from ReMotion's squatGeometry() — the
-           same one its 2D figure and knee marks use — so the knee bends by
+           same one its knee marks use — so the knee bends by
            exactly th and the knee sits on the knee arc. Heels flat, hips
            back, trunk balanced over the feet, arms straight forward.
            Part of the trunk lean is carried by the pelvis (rig detail only;
@@ -814,7 +699,7 @@
       }
       case 'heel_raise':
         Object.assign(p, both({ ankPF: th, shAbd: 8, elFlex: 12 }));
-        anchor = { joint: 'R_foot', local: [0, -0.106, 0.12], at: [110, 185], scale: 88 };
+        anchor = { joint: 'R_foot', local: 'ball', at: [110, 185], scale: 88 };   // ball of the foot, on the sole
         floor = true;
         break;
       case 'finger_spread':
@@ -871,10 +756,6 @@
 
     const av = root.AVATAR.build();
     av.root.position.set(0, 1, 0);
-    /* a slightly larger head so the face reads clearly at guide size;
-       raised by the same amount so the chin still meets the neck */
-    av.J.head.scale.setScalar(HEAD_SCALE);
-    av.J.head.position.y += 0.1 * (HEAD_SCALE - 1);
     scene.add(av.root);
 
     /* contact shadow for the whole-body view */
@@ -902,20 +783,16 @@
       rail: box(propMat(0x9aa6b2, 0.4))
     };
 
-    /* everything, for the isolated close-up views */
-    const meshes = []; av.root.traverse(o => { if (o.isMesh) { o.userData.baseVisible = o.visible; meshes.push(o); } });
-    /* MotionRx's props (dumbbells, therapy ball) are never shown: ReMotion's exercises use none */
-    ['L', 'R'].forEach(s => { av.J.dumbbell[s].visible = false; av.J.ball[s].visible = false; av.J.ball[s].userData.baseVisible = false; });
-    const under = {};
-    function subtree(name) {
-      if (!under[name]) { const set = new Set(); av.J[name].traverse(o => { if (o.isMesh) set.add(o); }); under[name] = set; }
-      return under[name];
-    }
-
     const camera = new T.OrthographicCamera(-1, 1, 1, -1, 0.05, 30);
-    R = { renderer, canvas, scene, camera, av, key, rim, fill, KEY, RIM, FILL, floor, tableG, meshes, subtree, props, w: 0, h: 0, isoNow: null };
+    R = { renderer, canvas, scene, camera, av, key, rim, fill, KEY, RIM, FILL, floor, tableG, props, w: 0, h: 0, isoNow: null };
     return R;
   }
+
+  /* resolves once Sophia's textures are decoded (the first paint waits for it) */
+  function ready() { return init().av.ready(); }
+
+  /* a point on the sole, in the foot joint's frame (Sophia's shoes) */
+  function footPt(foot, k, out) { return out.copy(R.av.J[foot + '_footPts'][k]); }
 
   const _v = new T.Vector3(), _c = new T.Vector3(), _dir = new T.Vector3();
 
@@ -931,6 +808,7 @@
     });
     av.root.updateMatrixWorld(true);
     if (m.contact) backToesOnFloor(m);
+    root.SOPHIA_AVATAR.sync(av, m.pose);                         // v19: Sophia follows the rig
   }
 
   /* v17.8 lunge: tune the back hip so the back toes rest on the floor
@@ -939,8 +817,8 @@
   const _t1 = new T.Vector3(), _t2 = new T.Vector3();
   function backToesOnFloor(m) {
     const { av } = R;
-    const floorY = () => av.J.R_foot.localToWorld(_t1.set(0, -0.106, 0.04)).y;
-    const toeY = () => av.J.L_foot.localToWorld(_t2.set(0, -0.1, 0.17)).y;
+    const floorY = () => av.J.R_foot.localToWorld(footPt('R', 'mid', _t1)).y;
+    const toeY = () => av.J.L_foot.localToWorld(footPt('L', 'tip', _t2)).y;
     const base = m.pose.L_hipFlex;
     let lo = -40, hi = 40;
     const at = d => { m.pose.L_hipFlex = base + d; root.AVATAR.applyPose(av.J, m.pose); av.root.updateMatrixWorld(true); return toeY() - floorY(); };
@@ -955,11 +833,13 @@
    * Draw the avatar for (exId, th, dir) into a 2D canvas that covers the
    * figure-space box [box.x, box.x + box.w] x [box.y, box.y + box.h].
    */
-  function draw(target, exId, th, dir, box) {
+  function draw(target, exId, th, dir, box, opts) {
     const m = mapAngles(exId, th, dir);
+    /* v19: opts.full = whole figure standing with the soles at opts.at (home page) */
+    const full = !!(opts && opts.full);
     if (!m) return false;
     init();
-    const { renderer, scene, camera, av, key, rim, fill, floor, tableG, meshes } = R;
+    const { renderer, scene, camera, av, key, rim, fill, floor, tableG } = R;
     const W = target.width, H = target.height;
     if (!W || !H) return false;
     if (W > R.w || H > R.h) {
@@ -969,17 +849,25 @@
     pose(m);
 
     /* isolated close-up (finger view shows the forearm and hand only) */
-    if (R.isoNow !== m.iso) {
-      const keep = m.iso ? R.subtree(m.iso) : null;
-      meshes.forEach(o => { o.visible = o.userData.baseVisible && (!keep || keep.has(o)); });
-      R.isoNow = m.iso;
+    const iso = full ? null : m.iso;
+    if (R.isoNow !== iso) {
+      av.setIso(iso);
+      R.isoNow = iso;
     }
 
     /* anchor: the rig joint lands on ReMotion's mark pivot */
-    const A = (m.anchor.local
-      ? av.J[m.anchor.joint].localToWorld(_v.set(m.anchor.local[0], m.anchor.local[1], m.anchor.local[2]))
-      : av.J[m.anchor.joint].getWorldPosition(_v.set(0, 0, 0))).clone();
-    const s = m.anchor.scale, ax = m.anchor.at[0], ay = m.anchor.at[1];
+    const loc = m.anchor.local;
+    let A, s, ax, ay;
+    if (full) {
+      A = av.J.R_foot.localToWorld(footPt('R', 'mid', _v)).clone()
+        .add(av.J.L_foot.localToWorld(footPt('L', 'mid', _v))).multiplyScalar(0.5);
+      s = opts.scale; ax = opts.at[0]; ay = opts.at[1];
+    } else {
+      A = (loc
+        ? av.J[m.anchor.joint].localToWorld(typeof loc === 'string' ? footPt(m.anchor.joint.charAt(0), loc, _v) : _v.set(loc[0], loc[1], loc[2]))
+        : av.J[m.anchor.joint].getWorldPosition(_v.set(0, 0, 0))).clone();
+      s = m.anchor.scale; ax = m.anchor.at[0]; ay = m.anchor.at[1];
+    }
     if (m.view === 'front') _dir.set(0, 0, 1);
     else if (m.view === 'frontUp') _dir.set(0, Math.sin(rad(30)), Math.cos(rad(30)));   // v18: front, camera raised 30°
     else _dir.set(-1, 0, 0);
@@ -998,11 +886,11 @@
     fill.position.copy(C).add(R.FILL); fill.target.position.copy(C);
     key.target.updateMatrixWorld(); rim.target.updateMatrixWorld(); fill.target.updateMatrixWorld();
 
-    /* floor under the trainers (squat) */
-    floor.visible = !!m.floor;
-    if (m.floor) {
-      const fy = Math.min(av.J.R_foot.localToWorld(_c.set(0, -0.106, 0.04)).y, av.J.L_foot.localToWorld(_c.set(0, -0.106, 0.04)).y,
-                          av.J.R_foot.localToWorld(_c.set(0, -0.104, 0.15)).y, av.J.L_foot.localToWorld(_c.set(0, -0.104, 0.15)).y);
+    /* floor under her shoes (squat) */
+    floor.visible = !!(m.floor || full);
+    if (floor.visible) {
+      const fy = Math.min(av.J.R_foot.localToWorld(footPt('R', 'mid', _c)).y, av.J.L_foot.localToWorld(footPt('L', 'mid', _c)).y,
+                          av.J.R_foot.localToWorld(footPt('R', 'tip', _c)).y, av.J.L_foot.localToWorld(footPt('L', 'tip', _c)).y);
       floor.position.set(A.x, fy, A.z);
     }
     placeProps(m);
@@ -1010,7 +898,7 @@
     tableG.visible = !!m.table;
     if (m.table) {
       const wr = av.J.R_hand.getWorldPosition(_c.set(0, 0, 0));
-      tableG.position.set(wr.x, wr.y - 0.031, wr.z + 0.012);
+      tableG.position.set(wr.x, wr.y - 0.022, wr.z + 0.012);   // v19: Sophia's slimmer wrist
     }
 
     renderer.setScissorTest(true);
@@ -1031,7 +919,7 @@
     const P = m.props || {};
     Object.keys(props).forEach(k => { props[k].visible = false; });
     const W = (j, l) => l ? av.J[j].localToWorld(_p.set(l[0], l[1], l[2])).clone() : av.J[j].getWorldPosition(_p.set(0, 0, 0)).clone();
-    const sole = () => Math.min(av.J.R_foot.localToWorld(_p.set(0, -0.106, 0.04)).y, av.J.L_foot.localToWorld(_p2.set(0, -0.106, 0.04)).y);
+    const sole = () => Math.min(av.J.R_foot.localToWorld(footPt('R', 'mid', _p)).y, av.J.L_foot.localToWorld(footPt('L', 'mid', _p2)).y);
     if (P.stick) {
       const a = W('L_hand', [0, -0.07, 0.01]), b = W('R_hand', [0, -0.07, 0.01]);
       const mid = a.clone().add(b).multiplyScalar(0.5), d = a.clone().sub(b), L = d.length() + 0.22;
@@ -1041,7 +929,7 @@
     if (P.wall) {
       const s = W('R_upperArm');
       props.wall.visible = true; props.wall.scale.set(1.6, 3, 0.04);
-      props.wall.position.set(s.x, s.y, s.z + P.wall + 0.02);
+      props.wall.position.set(s.x, s.y, s.z + P.wall * av.J.reachK + 0.02);   // v19: at Sophia's reach
     }
     if (P.mat) {
       const s = W('R_upperArm'), hp = W('R_thigh');
@@ -1096,7 +984,7 @@
   }
 
   root.ReMotionAvatar3D = {
-    init, draw, supported, mapAngles,
+    init, ready, draw, supported, mapAngles,
     has: id => !!mapAngles(id, 0, null)
   };
 })(window);

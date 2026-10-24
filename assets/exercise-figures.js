@@ -1239,8 +1239,9 @@
                 CUR = { pfx: id + 'x', n: 0 };
                 const r = rig(th, dir, who);
                 api.pivot = r.mark ? { x: r.mark.x, y: r.mark.y } : null;   /* exposed for the problem highlight */
+                /* only Sophia is ever drawn: no 2D figure (until she is ready, only the marks show) */
                 if (fig3d.active()) fig3d.draw(th, dir);
-                else body.innerHTML = r.body;
+                else body.innerHTML = '';
                 mk.innerHTML = opts.marks === false ? '' : marks(r.mark, {
                     theta: th, target: st.target, live: st.live, liveSign: st.liveSign,
                     arrow: st.arrow, wrong: st.wrong, labels: st.labels
@@ -1255,10 +1256,10 @@
     }
 
     /* ======================================================================
-     *  3D LOOK  (v17.6)
-     *  The avatar's appearance comes from avatar-3d.js (the MotionRx
-     *  character). It is loaded on demand; until it is ready, or where WebGL
-     *  is missing, the 2D drawing above is shown. Angles, marks, the demo
+     *  3D LOOK  (v17.6 · Sophia)
+     *  The avatar is Sophia (sophia-model.js + avatar-3d.js), the ONLY
+     *  character: no 2D figure is drawn. She is loaded on demand; until she
+     *  is ready, or where WebGL is missing, only the marks are shown. Angles, marks, the demo
      *  timeline and everything the guide does are unchanged: the 3D avatar
      *  is posed from the same (exercise, angle, direction) as the drawing.
      * ==================================================================== */
@@ -1278,7 +1279,7 @@
         function loadScript(src) {
             return new Promise(function (ok, bad) {
                 const el = document.createElement('script');
-                el.src = src; el.async = true;
+                el.src = src + '?v=sophia1'; el.async = true;       // never reuse the old avatar from the cache
                 el.onload = ok; el.onerror = bad;
                 document.head.appendChild(el);
             });
@@ -1287,12 +1288,15 @@
             if (state !== 'idle') return;
             state = 'loading';
             (global.THREE ? Promise.resolve() : loadScript(base + 'vendor/three.min.js'))
+                /* Sophia: her model (mesh, skeleton, textures) before the avatar code */
+                .then(function () { return global.SOPHIA_MODEL ? null : loadScript(base + 'sophia-model.js'); })
                 .then(function () { return global.ReMotionAvatar3D ? null : loadScript(base + 'avatar-3d.js'); })
                 .then(function () {
                     const A = global.ReMotionAvatar3D;
                     if (!A || !A.supported()) throw new Error('no WebGL');
-                    /* building the character takes a moment: do it once, off the first paint */
-                    return new Promise(function (ok) { setTimeout(function () { A.init(); ok(); }, 60); });
+                    /* building the character takes a moment: do it once, off the first paint,
+                       and show her only when her textures are decoded */
+                    return new Promise(function (ok) { setTimeout(function () { A.init(); ok(A.ready ? A.ready() : null); }, 60); });
                 })
                 .then(function () {
                     state = 'ready';
