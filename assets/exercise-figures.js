@@ -1310,7 +1310,7 @@
         function loadScript(src) {
             return new Promise(function (ok, bad) {
                 const el = document.createElement('script');
-                el.src = src + '?v=duo1'; el.async = true;       // never reuse an old avatar from the cache
+                el.src = src + '?v=duo2'; el.async = true;       // never reuse an old avatar from the cache
                 el.onload = ok; el.onerror = bad;
                 document.head.appendChild(el);
             });

@@ -425,7 +425,7 @@
         if (!EF || !EF.setCharacter) return;
         const nav = $('#jump');
         const box = document.createElement('div');
-        box.className = 'who'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Show the exercises with');
+        box.className = 'who seg'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Show the exercises with');
         box.innerHTML = [['female', 'Female'], ['male', 'Male']].map(function (o) {
             return '<button type="button" data-c="' + o[0] + '" aria-pressed="' + (EF.character() === o[0]) + '">' + o[1] + '</button>';
         }).join('');
@@ -440,8 +440,43 @@
                 .then(function () { box.removeAttribute('aria-busy'); });
         });
     }
+    /* ======================================================================
+       THEME SWITCH — Light / Dark, remembered per viewer; until the viewer
+       picks one the page follows the device setting
+       ==================================================================== */
+    const THEME_KEY = 'rehabGuide.theme';
+    const sysDark = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+    function savedTheme() { try { const t = localStorage.getItem(THEME_KEY); return t === 'light' || t === 'dark' ? t : null; } catch (e) { return null; } }
+    function themeNow() { return savedTheme() || (sysDark && sysDark.matches ? 'dark' : 'light'); }
+    function themeSwitch() {
+        const t0 = savedTheme();
+        if (t0) document.documentElement.setAttribute('data-theme', t0);
+        const sun = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>';
+        const moon = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>';
+        const box = document.createElement('div');
+        box.className = 'theme seg'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Colour theme');
+        box.innerHTML = '<button type="button" data-t="light">' + sun + 'Light</button><button type="button" data-t="dark">' + moon + 'Dark</button>';
+        const mark = function () { const t = themeNow(); box.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.getAttribute('data-t') === t)); }); };
+        mark();
+        const nav = $('#jump');
+        nav.parentNode.insertBefore(box, nav);
+        box.addEventListener('click', function (ev) {
+            const b = ev.target.closest('button');
+            if (!b) return;
+            const t = b.getAttribute('data-t');
+            document.documentElement.setAttribute('data-theme', t);
+            try { localStorage.setItem(THEME_KEY, t); } catch (e) { /* private mode: not remembered */ }
+            mark();
+        });
+        /* no choice made yet: follow the device when it changes */
+        if (sysDark) {
+            const onSys = function () { if (!savedTheme()) mark(); };
+            if (sysDark.addEventListener) sysDark.addEventListener('change', onSys); else if (sysDark.addListener) sysDark.addListener(onSys);
+        }
+    }
     document.addEventListener('DOMContentLoaded', function () {
         whoSwitch();
+        themeSwitch();
         needSim(function () {});   /* preload the simulation */
         $('#jump').innerHTML = CATS.map(c => '<a data-cat="' + c.id + '" href="#' + c.id + '"><i style="background:' + cvar(c.id) + '"></i>' + esc(c.name) + '</a>').join('');
         window.addEventListener('hashchange', render);

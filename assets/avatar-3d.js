@@ -72,6 +72,9 @@
     return new T.Quaternion().setFromUnitVectors(d, to.clone().normalize()).multiply(q);
   }
   const mirror = v => new T.Vector3(-v.x, v.y, v.z);
+  const rad = d => d * Math.PI / 180;
+  /* rest fan of the fingers (degrees, + towards the thumb) */
+  const FAN = { index: 6, middle: 0, ring: -5, pinky: -11 };
 
   /* ---- Sophia's skeleton, and her rest pose matching the rig's zero pose:
      standing upright, facing +Z, arms hanging with palms in, legs straight,
@@ -146,8 +149,11 @@
       let q = fix[i] ? fix[i].clone() : (p < 0 ? Q[i].clone() : Aq[p].clone().multiply(lq[i]));
       let m;
       if ((m = /^(index|middle|ring|pinky)_0([123])_([lr])$/.exec(k))) {
-        // straight fingers, each along its own knuckle line (keeps the natural splay)
-        const dir = t[B(m[1] + '_01_' + m[3])].clone().applyQuaternion(Aq[B('hand_' + m[3])]);
+        // straight fingers in the plane of the palm, in one natural fan for every
+        // character (the scans' own knuckle lines splay and tilt differently):
+        // the middle finger straight down, index towards the thumb, ring and pinky away
+        const fan = rad(FAN[m[1]]);
+        const dir = DOWN.clone().multiplyScalar(Math.cos(fan)).addScaledVector(FWD, Math.sin(fan));
         const child = B(m[1] + (m[2] === '3' ? '_end_' : '_0' + (+m[2] + 1) + '_') + m[3]);
         q = swing(q, t[child], dir);
       } else if ((m = /^thumb_0([123])_([lr])$/.exec(k))) {

@@ -315,11 +315,13 @@ footer .wrap { padding-block: 16px 24px; }
 .detail[data-cat] .pill[aria-pressed="false"] { background: rgba(255,255,255,.92); color: color-mix(in srgb, var(--c) 40%, #0E2340); }
 .detail[data-cat] .pager a:hover { border-color: var(--c); color: var(--c-deep); }
 
-/* character switch (Female / Male) in the header */
-.who { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
-.who button { border: 0; cursor: pointer; background: transparent; color: var(--ink-2); font-weight: 700; font-size: .82rem; padding: 5px 12px; border-radius: 999px; }
-.who button:hover { color: var(--ink); }
-.who button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+/* header switches: character (Female / Male) and theme (Light / Dark) */
+.seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+.seg button { border: 0; cursor: pointer; background: transparent; color: var(--ink-2); font-weight: 700; font-size: .82rem; padding: 5px 12px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.seg svg { flex: none; }
 .who[aria-busy="true"] button[aria-pressed="true"] { animation: whoBusy 1s ease-in-out infinite; }
 @keyframes whoBusy { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .who[aria-busy="true"] button[aria-pressed="true"] { animation: none; opacity: .7; } }
+@media (max-width: 520px) { .seg button { padding: 5px 9px; } .theme button { font-size: 0; gap: 0; } .theme button svg { width: 15px; height: 15px; } .theme button { padding: 6px 9px; } }
