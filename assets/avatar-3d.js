@@ -2,7 +2,9 @@
  * ============================================================================
  *  AVATAR 3D  (v19 · Sophia)
  * ============================================================================
- *  The exercise avatar is SOPHIA: the Renderpeople scan baked in
+ *  Two characters: female SOPHIA (sophia-model.js) and male MANUEL
+ *  (manuel-model.js, T-shirt and cargo shorts), see CHARACTERS below.
+ *  Both use the code here. The exercise avatar is SOPHIA: the Renderpeople scan baked in
  *  sophia-model.js (one skinned mesh, 88 bones, colour / normal / roughness
  *  maps), drawn with Three.js r128 (vendor/three.min.js) in the MotionRx
  *  studio lighting below. v21: she wears a sports outfit (loose black
@@ -28,6 +30,9 @@
   /* model centimetres → rig metres. 1.1 gives Sophia the old character's
      overall height, so every exercise keeps its framing. */
   const SCALE = 0.011;
+  /* every character is scaled to Sophia's height (head top 166.586 cm in her
+     scan), so all exercises keep their framing whoever is shown */
+  const REF_HEIGHT = 166.586;
   /* model space is Z up, facing -Y; rig space is Y up, facing +Z (L side +X) */
   const Q_AXES = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().set(
     1, 0, 0, 0,
@@ -72,7 +77,7 @@
      standing upright, facing +Z, arms hanging with palms in, legs straight,
      feet flat and forward, fingers straight. The scan's own pose (legs
      crossed, right hand on the hip) is only the bind pose of the mesh. */
-  function rest(D) {
+  function rest(D, SCALE) {
     const bones = D.meta.bones, n = bones.length;
     const name = [], par = [], ix = {}, P = [], Q = [], inv = [];
     bones.forEach((b, i) => {
@@ -219,10 +224,12 @@
     return { mat, iso };
   }
 
-  function build() {
-    const D = root.SOPHIA_MODEL;
-    if (!D) throw new Error('sophia-model.js is not loaded');
-    const S = rest(D), A = S.Ap;
+  /* D: a baked model (sophia-model.js / manuel-model.js), name: the mesh name */
+  function build(D, name) {
+    if (!D) throw new Error('the character model is not loaded');
+    const headEnd = D.meta.bones.filter(b => b.name === 'head_end')[0];
+    const SCALE = 0.011 * (headEnd ? REF_HEIGHT / headEnd.bind[14] : 1);
+    const S = rest(D, SCALE), A = S.Ap;
     const B = k => S.ix[k];
     const rel = (k, pk) => A[B(k)].clone().sub(A[B(pk)]);
     const grp = (parent, pos, order) => { const g = new T.Group(); g.position.copy(pos); if (order) g.rotation.order = order; parent.add(g); return g; };
@@ -273,7 +280,7 @@
     const readyP = new Promise(ok => { ready = ok; });
     const mats = material(D, ready);
     const mesh = new T.SkinnedMesh(geo, mats.mat);
-    mesh.name = 'sophia'; mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.name = name || 'avatar'; mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = true;
     avRoot.add(mesh);
     mesh.bind(skeleton, new T.Matrix4());
 
@@ -338,7 +345,7 @@
       else mesh.visible = true;
     }
 
-    const av = { root: avRoot, J, mesh, skeleton, bones, S, setIso, ready: () => readyP };
+    const av = { root: avRoot, J, mesh, skeleton, bones, S, setIso, ready: () => readyP, scaleV: new T.Vector3(SCALE, SCALE, SCALE) };
     av.links = links(S).map(l => Object.assign(l, { joint: jointOf(J, l), q: new T.Quaternion(), restInv: new T.Quaternion() }));
 
     // the rig's zero pose is Sophia's rest pose: remember each joint's rest rotation
@@ -358,7 +365,7 @@
 
   /* ---- every frame: Sophia's bones follow the posed rig ---- */
   const _q = new T.Quaternion(), _d = new T.Quaternion(), _d2 = new T.Quaternion(), _tw = new T.Quaternion();
-  const _Y = new T.Vector3(0, 1, 0), _sc = new T.Vector3(SCALE, SCALE, SCALE);
+  const _Y = new T.Vector3(0, 1, 0);
   function sync(av, pose) {
     const { S, bones, links, J } = av;
     av.root.updateMatrixWorld(true);
@@ -388,7 +395,7 @@
       if (p < 0) Wp[i].copy(S.Ap[i]);
       else if (S.name[i] === 'hip') Wp[i].copy(hipPos);
       else Wp[i].copy(S.t[i]).applyQuaternion(Wq[p]).add(Wp[p]);
-      bones[i].matrix.compose(Wp[i], Wq[i], _sc);
+      bones[i].matrix.compose(Wp[i], Wq[i], av.scaleV);
     }
     av.root.updateMatrixWorld(true);
   }
@@ -402,7 +409,7 @@
   const T = root.THREE;
   const rad = d => d * Math.PI / 180;
 
-  function build() { return root.SOPHIA_AVATAR.build(); }
+  function build(D, name) { return root.SOPHIA_AVATAR.build(D, name); }
 
   const _a = new T.Vector3(), _b = new T.Vector3(), _down = new T.Vector3(0, -1, 0);
   function applyPose(J, p) {
@@ -719,6 +726,41 @@
    * ==================================================================== */
   let R = null;   // { renderer, scene, camera, av, key, ... }
 
+  /* ======================================================================
+   *  CHARACTERS  — female (Sophia) and male (Manuel). Both scans share one
+   *  skeleton, so the same rig, mapping and retargeting drive either one.
+   *  Each is built once, the first time it is shown; only one is in the
+   *  scene at a time. wristDrop: table top below the wrist joint.
+   * ==================================================================== */
+  const CHARS = {
+    female: { model: 'SOPHIA_MODEL', name: 'sophia', wristDrop: 0.022 },
+    male:   { model: 'MANUEL_MODEL', name: 'manuel', wristDrop: 0.026 }
+  };
+  let current = 'female';
+  const built = {};
+  function avatarFor(c) {
+    if (!built[c]) {
+      const C = CHARS[c];
+      if (!root[C.model]) throw new Error(C.model + ' is not loaded');
+      built[c] = root.AVATAR.build(root[C.model], C.name);
+      built[c].root.position.set(0, 1, 0);
+    }
+    return built[c];
+  }
+  /* show character c ('female' | 'male'); resolves when its textures are ready */
+  function setCharacter(c) {
+    if (!CHARS[c]) c = 'female';
+    current = c;
+    if (!R) return Promise.resolve();
+    const av = avatarFor(c);
+    if (R.av !== av) {
+      if (R.av) { R.av.setIso(null); R.scene.remove(R.av.root); }
+      R.scene.add(av.root);
+      R.av = av; R.isoNow = null;
+    }
+    return av.ready();
+  }
+
   function init() {
     if (R) return R;
     const canvas = document.createElement('canvas');
@@ -754,8 +796,7 @@
     const fill = new T.DirectionalLight(0xffffff, 0.25); scene.add(fill); scene.add(fill.target);
     const KEY = new T.Vector3(2.0, 4.2, 3.4), RIM = new T.Vector3(-2.4, 3, -3.2), FILL = new T.Vector3(-3, 1.4, 2.2);
 
-    const av = root.AVATAR.build();
-    av.root.position.set(0, 1, 0);
+    const av = avatarFor(current);
     scene.add(av.root);
 
     /* contact shadow for the whole-body view */
@@ -898,7 +939,7 @@
     tableG.visible = !!m.table;
     if (m.table) {
       const wr = av.J.R_hand.getWorldPosition(_c.set(0, 0, 0));
-      tableG.position.set(wr.x, wr.y - 0.022, wr.z + 0.012);   // v19: Sophia's slimmer wrist
+      tableG.position.set(wr.x, wr.y - CHARS[current].wristDrop, wr.z + 0.012);   // each character's wrist thickness
     }
 
     renderer.setScissorTest(true);
@@ -984,7 +1025,8 @@
   }
 
   root.ReMotionAvatar3D = {
-    init, ready, draw, supported, mapAngles,
+    init, ready, draw, supported, mapAngles, setCharacter,
+    character: () => current, characters: () => Object.keys(CHARS), modelGlobal: c => (CHARS[c] || CHARS.female).model,
     has: id => !!mapAngles(id, 0, null)
   };
 })(window);

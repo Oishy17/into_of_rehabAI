@@ -314,3 +314,12 @@ footer .wrap { padding-block: 16px 24px; }
 .detail[data-cat] .pill { background: color-mix(in srgb, var(--c) 45%, #0E2340); }
 .detail[data-cat] .pill[aria-pressed="false"] { background: rgba(255,255,255,.92); color: color-mix(in srgb, var(--c) 40%, #0E2340); }
 .detail[data-cat] .pager a:hover { border-color: var(--c); color: var(--c-deep); }
+
+/* character switch (Female / Male) in the header */
+.who { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+.who button { border: 0; cursor: pointer; background: transparent; color: var(--ink-2); font-weight: 700; font-size: .82rem; padding: 5px 12px; border-radius: 999px; }
+.who button:hover { color: var(--ink); }
+.who button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.who[aria-busy="true"] button[aria-pressed="true"] { animation: whoBusy 1s ease-in-out infinite; }
+@keyframes whoBusy { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .who[aria-busy="true"] button[aria-pressed="true"] { animation: none; opacity: .7; } }

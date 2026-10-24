@@ -418,7 +418,30 @@
             if (target) target.scrollIntoView(); else window.scrollTo(0, 0);
         }
     }
+    /* ======================================================================
+       CHARACTER SWITCH — Female (Sophia) / Male (Manuel), remembered per viewer
+       ==================================================================== */
+    function whoSwitch() {
+        if (!EF || !EF.setCharacter) return;
+        const nav = $('#jump');
+        const box = document.createElement('div');
+        box.className = 'who'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Show the exercises with');
+        box.innerHTML = [['female', 'Female'], ['male', 'Male']].map(function (o) {
+            return '<button type="button" data-c="' + o[0] + '" aria-pressed="' + (EF.character() === o[0]) + '">' + o[1] + '</button>';
+        }).join('');
+        nav.parentNode.insertBefore(box, nav);
+        box.addEventListener('click', function (ev) {
+            const b = ev.target.closest('button');
+            if (!b || b.getAttribute('aria-pressed') === 'true') return;
+            box.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+            box.setAttribute('aria-busy', 'true');
+            EF.setCharacter(b.getAttribute('data-c'))
+                .catch(function (e) { try { console.warn('[guide] character switch failed', e); } catch (x) { /* */ } })
+                .then(function () { box.removeAttribute('aria-busy'); });
+        });
+    }
     document.addEventListener('DOMContentLoaded', function () {
+        whoSwitch();
         needSim(function () {});   /* preload the simulation */
         $('#jump').innerHTML = CATS.map(c => '<a data-cat="' + c.id + '" href="#' + c.id + '"><i style="background:' + cvar(c.id) + '"></i>' + esc(c.name) + '</a>').join('');
         window.addEventListener('hashchange', render);

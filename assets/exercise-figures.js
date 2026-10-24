@@ -1257,9 +1257,10 @@
 
     /* ======================================================================
      *  3D LOOK  (v17.6 · Sophia)
-     *  The avatar is Sophia (sophia-model.js + avatar-3d.js), the ONLY
-     *  character: no 2D figure is drawn. She is loaded on demand; until she
-     *  is ready, or where WebGL is missing, only the marks are shown. Angles, marks, the demo
+     *  The avatar is Sophia (female, sophia-model.js) or Manuel (male,
+     *  manuel-model.js), drawn by avatar-3d.js; the viewer picks one and the
+     *  choice is remembered. No 2D figure is drawn. The chosen character is
+     *  loaded on demand; until ready, or where WebGL is missing, only the marks are shown. Angles, marks, the demo
      *  timeline and everything the guide does are unchanged: the 3D avatar
      *  is posed from the same (exercise, angle, direction) as the drawing.
      * ==================================================================== */
@@ -1276,10 +1277,40 @@
         let state = 'idle';            // idle | loading | ready | off
         const figs = new Set();
 
+        /* two characters; the viewer's choice is remembered in this browser */
+        const MODELS = {
+            female: { file: 'sophia-model.js', global: 'SOPHIA_MODEL' },
+            male:   { file: 'manuel-model.js', global: 'MANUEL_MODEL' }
+        };
+        const PREF_KEY = 'rehabGuide.character';
+        let want = (function () {
+            try { const v = global.localStorage.getItem(PREF_KEY); return MODELS[v] ? v : 'female'; } catch (e) { return 'female'; }
+        })();
+        const modelLoads = {};
+        function loadModel(c) {
+            const M = MODELS[c];
+            if (global[M.global]) return Promise.resolve();
+            return modelLoads[c] || (modelLoads[c] = loadScript(base + M.file).catch(function (e) { delete modelLoads[c]; throw e; }));
+        }
+        /* bring the 3D picture to the wanted character, then repaint every figure */
+        function sync() {
+            const A = global.ReMotionAvatar3D, c = want;
+            if (state !== 'ready' || !A || A.character() === c) return Promise.resolve();
+            return loadModel(c)
+                .then(function () { return c === want ? A.setCharacter(c) : null; })
+                .then(function () { figs.forEach(function (fg) { if (fg.refresh) fg.refresh(); }); });
+        }
+        function setCharacter(c) {
+            if (!MODELS[c]) c = 'female';
+            want = c;
+            try { global.localStorage.setItem(PREF_KEY, c); } catch (e) { /* private mode: not remembered */ }
+            return sync();
+        }
+
         function loadScript(src) {
             return new Promise(function (ok, bad) {
                 const el = document.createElement('script');
-                el.src = src + '?v=sophia1'; el.async = true;       // never reuse the old avatar from the cache
+                el.src = src + '?v=duo1'; el.async = true;       // never reuse an old avatar from the cache
                 el.onload = ok; el.onerror = bad;
                 document.head.appendChild(el);
             });
@@ -1288,19 +1319,20 @@
             if (state !== 'idle') return;
             state = 'loading';
             (global.THREE ? Promise.resolve() : loadScript(base + 'vendor/three.min.js'))
-                /* Sophia: her model (mesh, skeleton, textures) before the avatar code */
-                .then(function () { return global.SOPHIA_MODEL ? null : loadScript(base + 'sophia-model.js'); })
                 .then(function () { return global.ReMotionAvatar3D ? null : loadScript(base + 'avatar-3d.js'); })
+                /* only the chosen character's model (mesh, skeleton, textures) is downloaded */
+                .then(function () { return loadModel(want); })
                 .then(function () {
                     const A = global.ReMotionAvatar3D;
                     if (!A || !A.supported()) throw new Error('no WebGL');
                     /* building the character takes a moment: do it once, off the first paint,
-                       and show her only when her textures are decoded */
-                    return new Promise(function (ok) { setTimeout(function () { A.init(); ok(A.ready ? A.ready() : null); }, 60); });
+                       and show them only when the textures are decoded */
+                    return new Promise(function (ok) { setTimeout(function () { A.setCharacter(want); A.init(); ok(A.ready()); }, 60); });
                 })
                 .then(function () {
                     state = 'ready';
                     figs.forEach(function (fg) { fg.wake(); });
+                    return sync();          // the viewer may have switched while loading
                 })
                 .catch(function (e) {
                     state = 'off';
@@ -1325,6 +1357,7 @@
                     catch (e) { on = false; fo.style.display = 'none'; try { console.warn('[ExerciseFigures] 3D draw failed', e); } catch (x) { /* */ } }
                 },
                 onRepaint: function (fn) { repaint = fn; },
+                refresh: function () { if (on) { lastDraw = 0; if (repaint) repaint(); } },
                 wake: function () {
                     if (on || state !== 'ready' || !A() || !A().has(exId) || !svg.isConnected) return;
                     const NS = 'http://www.w3.org/2000/svg';
@@ -1362,7 +1395,7 @@
             return fg;
         }
 
-        return { attach: attach, start: start, state: function () { return state; } };
+        return { attach: attach, start: start, state: function () { return state; }, setCharacter: setCharacter, character: function () { return want; } };
     })();
 
     /* ======================================================================
@@ -1398,6 +1431,9 @@
 
     global.ExerciseFigures = {
         mount: mount,
+        /* 'female' (Sophia) | 'male' (Manuel); returns a promise, resolved once shown */
+        setCharacter: function (c) { return Look3D.setCharacter(c); },
+        character: function () { return Look3D.character(); },
         demoAt: demoAt,
         demoPeak: demoPeak,
         info: function (id) { return EX[id] ? Object.assign({ id: id }, EX[id]) : null; },
