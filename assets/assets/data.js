@@ -1,0 +1,276 @@
+/* ==========================================================================
+   DATA — short, visual content only. One record per exercise.
+   how: what to do · frames: start / move / end captions
+   problem: main problem · for: conditions it is often recommended for
+   goal: what improves · lm: landmarks used · cam: camera position
+   rule: c = counts at, r = back below (rep complete), h = hold seconds
+   gauge: typical vs restricted range (°) — or 'strength' for weakness
+   ========================================================================== */
+(function (G) {
+    'use strict';
+    G.CATS = [
+        { id: 'neck', name: 'Face & Neck', tint: 'neck' },
+        { id: 'upper', name: 'Upper Body', tint: 'upper' },
+        { id: 'lower', name: 'Lower Body', tint: 'lower' },
+        { id: 'hand', name: 'Hand & Wrist', tint: 'hand' }
+    ];
+    const FS = 'Frozen shoulder';
+    G.EXS = [
+        /* ---------- Face & Neck ---------- */
+        { id: 'neck_flexion', cat: 'neck', name: 'Neck Flexion & Extension', how: 'Chin down, then look up',
+          frames: ['Look ahead', 'Chin moving down', 'Chin to chest'], problem: 'Stiff, painful neck',
+          for: ['Mechanical neck pain', 'Neck stiffness', 'After a neck collar'], goal: 'Easier looking down & up',
+          lm: ['Neck', 'Head'], measure: 'Head tilt from vertical', cam: 'Front, eye level', rule: { c: 15, r: 7, h: 2, max: 45, u: '°' }, gauge: [50, 20],
+          pb: { kind: 'rom', k: 0.45, cap: 'Stiff neck — chin stops early' } },
+        { id: 'neck_rotation', cat: 'neck', name: 'Neck Rotation', how: 'Turn head left & right',
+          frames: ['Face forward', 'Turning', 'Turned to side'], problem: 'Can’t turn head fully',
+          for: ['Mechanical neck pain', 'Neck stiffness'], goal: 'Shoulder checks, driving',
+          lm: ['Nose', 'Head centre'], measure: 'Nose turn from forward', cam: 'Front, eye level', rule: { c: 35, r: 12, h: 2, max: 80, u: '°' }, gauge: [75, 35],
+          pb: { kind: 'rom', k: 0.45, cap: 'Turn stops short, one side worse' , at: [100, 146] } },
+        { id: 'neck_lateral_flexion', cat: 'neck', name: 'Neck Lateral Flexion', how: 'Ear toward shoulder',
+          frames: ['Upright', 'Tilting', 'Ear to shoulder'], problem: 'Tight side-neck muscles',
+          for: ['Neck muscle tightness', 'Mechanical neck pain'], goal: 'Even side-bending',
+          lm: ['Neck', 'Head'], measure: 'Head tilt from vertical', cam: 'Front, eye level', rule: { c: 15, r: 6, h: 2, max: 45, u: '°' }, gauge: [45, 20],
+          pb: { kind: 'rom', k: 0.5, cap: 'Tight side muscles block the tilt' } },
+
+        /* ---------- Upper Body ---------- */
+        { id: 'shoulder_flexion', cat: 'upper', name: 'Shoulder Flexion', how: 'Raise arm forward & up',
+          frames: ['Arm down', 'Lift forward', 'Overhead'], problem: 'Can’t reach overhead',
+          for: [FS, 'Rotator cuff pain', 'Stiffness after surgery'], goal: 'Reach high shelves',
+          lm: ['Hip', 'Shoulder', 'Wrist'], measure: 'Angle at the shoulder', cam: 'Side or front, 2 m', rule: { c: 70, r: 34, h: 0, max: 110, u: '°' }, gauge: [180, 100],
+          pb: { kind: 'rom', k: 0.6, cap: 'Frozen shoulder — arm stops low' } },
+        { id: 'shoulder_abduction', cat: 'upper', name: 'Shoulder Abduction', how: 'Raise arm out to the side',
+          frames: ['Arms down', 'Out to side', 'Up high'], problem: 'Can’t lift arm sideways',
+          for: [FS, 'Shoulder stiffness', 'Rotator cuff pain'], goal: 'Dressing & washing',
+          lm: ['Hip', 'Shoulder', 'Wrist'], measure: 'Angle at the shoulder', cam: 'Front, 2–3 m', rule: { c: 72, r: 34, h: 0, max: 110, u: '°' }, gauge: [180, 90],
+          pb: { kind: 'rom', k: 0.55, cap: 'Frozen shoulder — arm stops at side' } },
+        { id: 'shoulder_external_rotation', cat: 'upper', name: 'Shoulder External Rotation', how: 'Elbow in, forearm out',
+          frames: ['Elbow at 90°', 'Rotating out', 'Rotated out'], problem: 'Outward turn lost first',
+          for: [FS, 'Shoulder stiffness', 'Rotator cuff pain'], goal: 'Hair, coat, reach behind',
+          lm: ['Elbow', 'Wrist'], measure: 'Forearm turn from forward', cam: 'Front, 2 m', rule: { c: 35, r: 12, h: 2, max: 90, u: '°' }, gauge: [80, 20],
+          pb: { kind: 'rom', k: 0.35, cap: 'Frozen shoulder — forearm barely turns' } },
+        { id: 'pendulum', cat: 'upper', name: 'Pendulum (Codman)', how: 'Lean on table, let arm swing',
+          frames: ['Arm hangs', 'Swinging', 'Swung forward'], problem: 'Too painful to lift arm',
+          for: [FS + ' (painful stage)', 'After shoulder surgery', 'Shoulder injury'], goal: 'Less pain, joint keeps moving',
+          lm: ['Shoulder', 'Wrist'], measure: 'Arm swing from vertical', cam: 'Front, 2 m', rule: { c: 12, r: 4, h: 0, max: 35, u: '°' }, gauge: 'pain',
+          pb: { kind: 'pain', k: 0.4, cap: 'Painful shoulder — arm held stiff' } },
+        { id: 'assisted_shoulder_flexion', cat: 'upper', name: 'Assisted Shoulder Flexion', how: 'Good arm lifts the other',
+          frames: ['Lie, hold wrist', 'Lift together', 'Overhead'], problem: 'Too weak or sore to lift alone',
+          for: [FS, 'After shoulder surgery', 'Restricted flexion'], goal: 'Overhead range, less effort',
+          lm: ['Hip', 'Shoulder', 'Wrist'], measure: 'Angle at the shoulder', cam: 'At your feet', rule: { c: 90, r: 40, h: 2, max: 170, u: '°' }, gauge: [180, 110],
+          pb: { kind: 'rom', k: 0.6, cap: 'Stiff shoulder — can’t get overhead' } },
+        { id: 'external_rotation_stick', cat: 'upper', name: 'External Rotation with a Stick', how: 'Stick pushes forearm out',
+          frames: ['Hold stick', 'Pushing out', 'Rotated out'], problem: 'Stiff outward rotation',
+          for: [FS, 'Shoulder stiffness', 'After shoulder surgery'], goal: 'More outward turn',
+          lm: ['Elbow', 'Wrist'], measure: 'Forearm turn from forward', cam: 'Front, 2 m', rule: { c: 35, r: 12, h: 2, max: 90, u: '°' }, gauge: [80, 20],
+          pb: { kind: 'rom', k: 0.35, cap: 'Capsule tight — rotation blocked' } },
+        { id: 'finger_walk', cat: 'upper', name: 'Finger Walk (Wall Climb)', how: 'Walk fingers up the wall',
+          frames: ['Fingers on wall', 'Climbing', 'At the top'], problem: 'Reach stops low',
+          for: [FS, 'Shoulder stiffness', 'Rotator cuff pain'], goal: 'Higher reach',
+          lm: ['Hip', 'Shoulder', 'Wrist'], measure: 'Angle at the shoulder', cam: 'Behind you, 2 m', rule: { c: 100, r: 50, h: 2, max: 170, u: '°' }, gauge: [180, 100],
+          pb: { kind: 'rom', k: 0.6, cap: 'Reach stops low on the wall' } },
+        { id: 'table_slide', cat: 'upper', name: 'Table Slide (Forward)', how: 'Slide hand forward on towel',
+          frames: ['Hand on towel', 'Sliding', 'Reached forward'], problem: 'Lifting arm hurts',
+          for: [FS, 'After shoulder surgery', 'Restricted flexion'], goal: 'Supported forward reach',
+          lm: ['Hip', 'Shoulder', 'Wrist'], measure: 'Angle at the shoulder', cam: 'Across the table', rule: { c: 25, r: 10, h: 2, max: 75, u: '°' }, gauge: [180, 100],
+          pb: { kind: 'rom', k: 0.5, cap: 'Shoulder stops the slide early' } },
+        { id: 'cross_body_stretch', cat: 'upper', name: 'Cross-Body Shoulder Stretch', how: 'Pull arm across chest',
+          frames: ['Arm forward', 'Moving across', 'Across chest'], problem: 'Tight back of shoulder',
+          for: ['Posterior shoulder tightness', 'Shoulder stiffness', FS], goal: 'Reach across body',
+          lm: ['Shoulder', 'Wrist'], measure: 'Arm swing from forward', cam: 'Front, 2 m', rule: { c: 30, r: 10, h: 5, max: 75, u: '°' }, gauge: [50, 20],
+          pb: { kind: 'rom', k: 0.5, cap: 'Tight back of shoulder' } },
+        { id: 'scapular_squeeze', cat: 'upper', name: 'Shoulder Blade Squeeze', how: 'Squeeze blades together',
+          frames: ['Relaxed', 'Squeezing', 'Blades together'], problem: 'Rounded shoulders, poor control',
+          for: ['Posture-related shoulder pain', 'Rotator cuff pain', 'Shoulder-blade control'], goal: 'Better posture',
+          lm: ['Left blade', 'Right blade'], measure: 'Gap closing (%)', cam: 'Front, 1.5 m', rule: { c: 40, r: 15, h: 3, max: 100, u: '%' }, gauge: 'strength',
+          pb: { kind: 'weak', k: 0.45, cap: 'Weak blade muscles, round shoulders' , at: [90, 92] } },
+        { id: 'elbow_flexion', cat: 'upper', name: 'Elbow Flexion & Extension', how: 'Bend, then straighten',
+          frames: ['Arm straight', 'Bend', 'Hand to shoulder'], problem: 'Stiff elbow after a cast',
+          for: ['Elbow stiffness', 'Elbow injury (cleared)', 'After elbow surgery'], goal: 'Hand to mouth',
+          lm: ['Shoulder', 'Elbow', 'Wrist'], measure: 'Elbow bend', cam: 'Front, 2 m', rule: { c: 105, r: 40, h: 1, max: 150, u: '°' }, gauge: [145, 90],
+          pb: { kind: 'rom', k: 0.6, cap: 'Stiff elbow — hand can’t reach' } },
+        { id: 'trunk_rotation', cat: 'upper', name: 'Trunk Rotation', how: 'Turn upper body side to side',
+          frames: ['Face forward', 'Turning', 'Turned'], problem: 'Stiff upper back',
+          for: ['Upper-back stiffness', 'Mechanical back pain', 'Trunk mobility loss'], goal: 'Look behind easily',
+          lm: ['Shoulder line', 'Hip line'], measure: 'Shoulders vs hips', cam: 'Front, 2 m', rule: { c: 25, r: 10, h: 2, max: 60, u: '°' }, gauge: [45, 20],
+          pb: { kind: 'rom', k: 0.5, cap: 'Stiff upper back limits the turn' } },
+
+        /* ---------- Lower Body ---------- */
+        { id: 'hip_abduction', cat: 'lower', name: 'Standing Hip Abduction', how: 'Hold support, leg out to side',
+          frames: ['Hold support', 'Leg moving out', 'Leg out'], problem: 'Weak side-hip muscles',
+          for: ['Hip abductor weakness', 'Hip osteoarthritis', 'Gait & balance problems'], goal: 'Level hips when walking',
+          lm: ['Hip', 'Knee'], measure: 'Leg angle from vertical', cam: 'Front, 3 m', rule: { c: 20, r: 8, h: 1, max: 50, u: '°' }, gauge: 'strength',
+          pb: { kind: 'weak', k: 0.5, cap: 'Weak hip muscles — leg drops' } },
+        { id: 'standing_march', cat: 'lower', name: 'Standing March', how: 'Knee up, then switch',
+          frames: ['Stand tall', 'Knee rising', 'Knee up'], problem: 'Low foot lift, shuffling',
+          for: ['Hip flexor weakness', 'Tripping / low foot clearance', 'Gait problems'], goal: 'Steps & stairs',
+          lm: ['Trunk', 'Hip', 'Knee'], measure: 'Thigh lift', cam: 'Front, 3 m', rule: { c: 60, r: 20, h: 0, max: 110, u: '°' }, gauge: 'strength',
+          pb: { kind: 'weak', k: 0.55, cap: 'Weak hip flexors — low knee' } },
+        { id: 'standing_knee_flexion', cat: 'lower', name: 'Standing Knee Flexion', how: 'Heel toward buttock',
+          frames: ['Hold support', 'Bending', 'Heel up'], problem: 'Stiff knee',
+          for: ['Knee stiffness', 'Knee injury', 'After knee surgery'], goal: 'Stairs, sitting',
+          lm: ['Hip', 'Knee', 'Ankle'], measure: 'Knee bend', cam: 'Front, 3 m', rule: { c: 60, r: 20, h: 1, max: 130, u: '°' }, gauge: [135, 70],
+          pb: { kind: 'rom', k: 0.55, cap: 'Stiff knee — heel stays low' } },
+        { id: 'forward_lunge', cat: 'lower', name: 'Forward Lunge', how: 'Step forward, bend both knees',
+          frames: ['Split stance', 'Lowering', 'Low lunge'], problem: 'Weak, unsteady legs',
+          for: ['Knee rehabilitation', 'Leg weakness', 'Daily mobility'], goal: 'Steady stepping',
+          lm: ['Hip', 'Knee', 'Ankle'], measure: 'Front-knee bend', cam: 'Front, 3 m', rule: { c: 45, r: 15, h: 0, max: 110, u: '°' }, gauge: 'strength',
+          pb: { kind: 'weak', k: 0.5, cap: 'Weak legs — shallow, shaky lunge' } },
+        { id: 'squat', cat: 'lower', name: 'Full Squat', how: 'Sit back, stand up',
+          frames: ['Stand', 'Sit back', 'Low squat'], problem: 'Hard to rise from a chair',
+          for: ['Knee osteoarthritis', 'After knee surgery (later)', 'Leg deconditioning'], goal: 'Sit-to-stand',
+          lm: ['Hip', 'Knee', 'Ankle'], measure: 'Knee bend', cam: 'Front, 3 m', rule: { c: 67, r: 27, h: 0, max: 110, u: '°' }, gauge: [120, 60],
+          pb: { kind: 'weak', k: 0.5, cap: 'Knee pain / weakness — can’t go down' } },
+        { id: 'heel_raise', cat: 'lower', name: 'Heel Raise', how: 'Rise onto toes',
+          frames: ['Heels down', 'Rising', 'On toes'], problem: 'Weak calf, weak push-off',
+          for: ['Calf weakness', 'Ankle sprain', 'Achilles rehabilitation'], goal: 'Push-off & ankle stability',
+          lm: ['Toe', 'Heel'], measure: 'Heel lift angle', cam: 'Front, low, 2.5 m', rule: { c: 15, r: 5, h: 1, max: 45, u: '°' }, gauge: 'strength',
+          pb: { kind: 'weak', k: 0.5, cap: 'Weak calf — heel barely lifts' , off: [-5, -40] } },
+
+        /* ---------- Hand & Wrist ---------- */
+        { id: 'wrist_flexion', cat: 'hand', name: 'Wrist Flexion & Extension', how: 'Bend wrist down & up',
+          frames: ['Wrist level', 'Bending', 'Bent down'], problem: 'Stiff wrist after a cast',
+          for: ['Wrist stiffness', 'Wrist injury (cleared)', 'After wrist surgery'], goal: 'Push up, type, lift',
+          lm: ['Forearm', 'Wrist', 'Hand'], measure: 'Wrist bend', cam: 'Front, 50 cm', rule: { c: 22, r: 10, h: 2, max: 70, u: '°' }, gauge: [75, 30],
+          pb: { kind: 'rom', k: 0.5, cap: 'Stiff wrist after a cast' } },
+        { id: 'finger_flexion', cat: 'hand', name: 'Finger Squeeze', how: 'Make a fist, then open',
+          frames: ['Hand open', 'Curl', 'Fist'], problem: 'Weak grip',
+          for: ['Reduced grip strength', 'Hand weakness after a cast', 'Hand injury'], goal: 'Hold cups, open jars',
+          lm: ['Knuckle', 'Middle joint', 'Tip joint'], measure: 'Hand closure (%)', cam: 'Front, 50 cm', rule: { c: 55, r: 22, h: 2, max: 100, u: '%' }, gauge: 'strength',
+          pb: { kind: 'weak', k: 0.5, cap: 'Weak grip — fist won’t close' , at: [98, 128] } },
+        { id: 'finger_spread', cat: 'hand', name: 'Finger Open & Spread', how: 'Spread fingers wide',
+          frames: ['Fingers together', 'Spreading', 'Spread wide'], problem: 'Stiff fingers',
+          for: ['Finger stiffness', 'Hand injury', 'Hand weakness'], goal: 'Grasp big objects',
+          lm: ['Index tip', 'Palm', 'Little tip'], measure: 'Index–little angle', cam: 'Front, 50 cm', rule: { c: 20, r: 8, h: 2, max: 60, u: '°' }, gauge: [40, 15],
+          pb: { kind: 'rom', k: 0.45, cap: 'Stiff fingers stay together' } }
+    ];
+    G.EXS.forEach((e, i) => { e.n = i + 1; e.slug = e.id.replace(/_/g, '-'); });
+
+    /* ======================================================================
+       WHY IT IS PRESCRIBED — disease-related reason, shown as a simulation.
+       DZ: condition -> m: tissue mechanism drawn in why-sim.js
+                        what: the condition in a few words
+                        inside: what goes wrong inside the body
+       ACT: exercise -> joint: body part shown · act: what the exercise does
+       Mechanisms: capsule · tight · weak · scar · pain · tendon · oa · spine
+       ==================================================================== */
+    G.DZ = {
+        'Mechanical neck pain':        { m: 'spine',  what: 'Strained neck joints & muscles', inside: 'Small neck joints stiffen and muscles guard, so a few levels stop moving and the rest get overloaded' },
+        'Neck stiffness':              { m: 'spine',  what: 'Neck that won’t move freely', inside: 'Some neck segments lock up, so bending relies on only a few levels' },
+        'After a neck collar':         { m: 'spine',  what: 'Neck kept still for weeks', inside: 'Weeks without movement leave neck joints stiff and the muscles weak and guarded' },
+        'Neck muscle tightness':       { m: 'tight',  what: 'Shortened side-neck muscles', inside: 'Muscle fibres stay short and form tight knots that pull the head and block the tilt' },
+        'Frozen shoulder':             { m: 'capsule', what: 'Adhesive capsulitis', inside: 'The joint capsule becomes inflamed, thick and shrinks — it sticks to the ball and locks the shoulder' },
+        'Frozen shoulder (painful stage)': { m: 'pain', what: 'Freezing stage — pain at night & rest', inside: 'The inflamed capsule fires pain signals; muscles guard and hold the arm stiff' },
+        'Rotator cuff pain':           { m: 'tendon', what: 'Irritated cuff tendon', inside: 'Cuff tendon fibres become swollen and disorganised, so lifting the arm pinches and hurts' },
+        'Stiffness after surgery':     { m: 'scar',   what: 'Healing after an operation', inside: 'Healing makes scar tissue; with little movement the fibres glue the joint layers together' },
+        'Shoulder stiffness':          { m: 'capsule', what: 'Tight shoulder joint', inside: 'The capsule around the ball-and-socket tightens, so the ball can’t roll and glide fully' },
+        'After shoulder surgery':      { m: 'scar',   what: 'Repair healing', inside: 'Scar tissue forms around the repair; without safe movement it binds the joint' },
+        'Shoulder injury':             { m: 'pain',   what: 'Recent shoulder injury', inside: 'The injured joint is inflamed; pain makes muscles guard and stop the arm moving' },
+        'Restricted flexion':          { m: 'capsule', what: 'Arm can’t go up', inside: 'The lower part of the capsule is shrunken, so it blocks the arm lifting forward' },
+        'Posterior shoulder tightness': { m: 'tight', what: 'Tight back of shoulder', inside: 'Muscles and capsule at the back of the shoulder are short, pulling the ball forward' },
+        'Posture-related shoulder pain': { m: 'weak', what: 'Rounded-shoulder posture', inside: 'Shoulder-blade muscles switch off and weaken, so the shoulders roll forward and pinch' },
+        'Shoulder-blade control':      { m: 'weak',   what: 'Poor blade control', inside: 'Blade muscles fire late and weakly, so the shoulder blade wobbles during arm movement' },
+        'Elbow stiffness':             { m: 'scar',   what: 'Stiff elbow', inside: 'Scar and tight capsule tissue form across the elbow hinge and stop it bending' },
+        'Elbow injury (cleared)':      { m: 'scar',   what: 'Healed elbow injury', inside: 'The healed injury leaves scar fibres laid down in random directions, limiting the hinge' },
+        'After elbow surgery':         { m: 'scar',   what: 'Healing elbow', inside: 'Surgical scar tissue binds the hinge if it is not moved gently' },
+        'Upper-back stiffness':        { m: 'spine',  what: 'Stiff thoracic spine', inside: 'Upper-back segments stiffen, so turning comes from only a few levels' },
+        'Mechanical back pain':        { m: 'spine',  what: 'Strained back joints & muscles', inside: 'Back muscles guard and a few segments lock, overloading the others' },
+        'Trunk mobility loss':         { m: 'spine',  what: 'Reduced trunk movement', inside: 'Several spinal levels move less, so the trunk can’t rotate smoothly' },
+        'Hip abductor weakness':       { m: 'weak',   what: 'Weak side-hip muscles', inside: 'Only a few side-hip muscle fibres switch on, so the pelvis drops when you stand on one leg' },
+        'Hip osteoarthritis':          { m: 'oa',     what: 'Wear in the hip joint', inside: 'Cartilage thins and muscles weaken, so the hip joint takes too much load and aches' },
+        'Gait & balance problems':     { m: 'weak',   what: 'Unsteady walking', inside: 'Hip and leg muscles respond weakly and slowly, so balance is lost easily' },
+        'Hip flexor weakness':         { m: 'weak',   what: 'Weak hip-lifting muscles', inside: 'Few hip flexor fibres fire, so the knee and foot barely lift' },
+        'Tripping / low foot clearance': { m: 'weak', what: 'Feet catch the ground', inside: 'Weak hip lift means the foot skims the floor and catches' },
+        'Gait problems':               { m: 'weak',   what: 'Shuffling walk', inside: 'Leg muscles produce little force, so steps are short and low' },
+        'Knee stiffness':              { m: 'scar',   what: 'Stiff knee', inside: 'Scar tissue and tight capsule tissue form in the knee and stop it bending' },
+        'Knee injury':                 { m: 'scar',   what: 'Healing knee injury', inside: 'The healing knee lays down scar fibres that limit bending' },
+        'After knee surgery':          { m: 'scar',   what: 'Healing after knee surgery', inside: 'Scar tissue and swelling glue the knee layers; early movement keeps them gliding' },
+        'Knee rehabilitation':         { m: 'weak',   what: 'Rebuilding the knee', inside: 'Thigh muscles shrink after injury, so the knee feels unstable' },
+        'Leg weakness':                { m: 'weak',   what: 'Weak leg muscles', inside: 'Fewer leg muscle fibres fire, so standing and stepping feel shaky' },
+        'Daily mobility':              { m: 'weak',   what: 'Everyday movement', inside: 'Little use lets leg muscles weaken, so steps and stairs become harder' },
+        'Knee osteoarthritis':         { m: 'oa',     what: 'Wear in the knee joint', inside: 'Cartilage thins and the thigh muscle weakens, so the knee joint is overloaded and painful' },
+        'After knee surgery (later)':  { m: 'weak',   what: 'Late stage after surgery', inside: 'The knee has healed but the thigh muscles are still small and weak' },
+        'Leg deconditioning':          { m: 'weak',   what: 'Loss of leg fitness', inside: 'Inactivity shrinks leg muscles so rising from a chair is hard' },
+        'Calf weakness':               { m: 'weak',   what: 'Weak calf muscles', inside: 'Few calf fibres fire, so push-off when walking is weak' },
+        'Ankle sprain':                { m: 'tendon', what: 'Stretched ankle ligament', inside: 'Torn ligament fibres heal in a messy, weak pattern and the ankle feels wobbly' },
+        'Achilles rehabilitation':     { m: 'tendon', what: 'Achilles tendon problem', inside: 'Achilles fibres are swollen and disorganised, so the tendon can’t take load' },
+        'Wrist stiffness':             { m: 'scar',   what: 'Stiff wrist', inside: 'After a cast, scar and capsule tissue bind the wrist so it barely bends' },
+        'Wrist injury (cleared)':      { m: 'scar',   what: 'Healed wrist injury', inside: 'Healing leaves random scar fibres across the wrist joint' },
+        'After wrist surgery':         { m: 'scar',   what: 'Healing wrist', inside: 'Surgical scar tissue glues the wrist layers if not moved gently' },
+        'Reduced grip strength':       { m: 'weak',   what: 'Weak grip', inside: 'Forearm and hand muscles produce little force, so the fist won’t close firmly' },
+        'Hand weakness after a cast':  { m: 'weak',   what: 'Weak hand after a cast', inside: 'Weeks in a cast shrink hand muscles and slow their nerve signals' },
+        'Hand injury':                 { m: 'scar',   what: 'Healing hand injury', inside: 'Scar tissue around finger tendons and joints limits how far fingers move' },
+        'Finger stiffness':            { m: 'scar',   what: 'Stiff finger joints', inside: 'Finger joint capsules tighten and scar tissue stops them opening' },
+        'Hand weakness':               { m: 'weak',   what: 'Weak hand muscles', inside: 'Small hand muscles fire weakly, so fingers can’t spread or grip well' },
+        'Cervical mobility deficits':  { m: 'spine',  what: 'Reduced neck movement', inside: 'Some cervical levels move less than they should, so turning and tilting are limited' },
+        'Shoulder mobility deficits':  { m: 'capsule', what: 'Limited shoulder movement', inside: 'Tight capsule and soft tissue around the shoulder limit how far the arm can travel' },
+    };
+    G.ACT = {
+        neck_flexion:               { joint: 'neck', act: 'Glides every neck level through its range, so guarded muscles relax and stiff joints loosen' },
+        neck_rotation:              { joint: 'neck', act: 'Turns each neck level gently, sharing the movement out instead of loading one spot' },
+        neck_lateral_flexion:       { joint: 'neck', act: 'A slow side-bend lengthens the tight side-neck muscle and releases its knots' },
+        shoulder_flexion:           { joint: 'shoulder', act: 'Each lift gently stretches the lower capsule, so the ball rolls further each week' },
+        shoulder_abduction:         { joint: 'shoulder', act: 'Lifting sideways stretches the lower capsule and keeps the ball gliding' },
+        shoulder_external_rotation: { joint: 'shoulder', act: 'Turning outward stretches the front capsule — the part that tightens first' },
+        pendulum:                   { joint: 'shoulder', act: 'A relaxed, gravity-led swing moves joint fluid and calms pain without muscle effort' },
+        assisted_shoulder_flexion:  { joint: 'shoulder', act: 'The good arm does the work, so the stiff capsule is stretched without strain' },
+        external_rotation_stick:    { joint: 'shoulder', act: 'The stick gives a steady push that stretches the tight front capsule' },
+        finger_walk:                { joint: 'shoulder', act: 'Small steps up the wall stretch the capsule a little more each time' },
+        table_slide:                { joint: 'shoulder', act: 'The table carries the arm’s weight while the capsule is stretched forward' },
+        cross_body_stretch:         { joint: 'shoulder', act: 'Pulling across the chest lengthens the tight tissue at the back of the shoulder' },
+        scapular_squeeze:           { joint: 'shoulder blade', act: 'Squeezing switches on more blade-muscle fibres and builds their strength' },
+        elbow_flexion:              { joint: 'elbow', act: 'Repeated bending stretches scar fibres and lines them up, so the hinge glides' },
+        trunk_rotation:             { joint: 'spine', act: 'Turning moves every spinal level, freeing the stiff ones and calming guarding' },
+        hip_abduction:              { joint: 'hip', act: 'Lifting the leg out recruits more side-hip fibres and makes the muscle bigger' },
+        standing_march:             { joint: 'hip', act: 'Lifting the knee trains hip flexor fibres to fire faster and stronger' },
+        standing_knee_flexion:      { joint: 'knee', act: 'Bending stretches knee scar tissue and keeps the joint layers gliding' },
+        forward_lunge:              { joint: 'leg', act: 'Controlled lowering recruits more leg fibres and trains balance' },
+        squat:                      { joint: 'knee', act: 'Squats build thigh muscle that shares the load and pumps fluid into the cartilage' },
+        heel_raise:                 { joint: 'calf / ankle', act: 'Rising onto toes loads the calf and tendon so fibres grow strong and aligned' },
+        wrist_flexion:              { joint: 'wrist', act: 'Bending back and forth stretches scar fibres and restores wrist glide' },
+        finger_flexion:             { joint: 'hand', act: 'Squeezing recruits more grip fibres and rebuilds hand strength' },
+        finger_spread:              { joint: 'fingers', act: 'Spreading opens tight finger tissue and works the small hand muscles that hold fingers apart' }
+    };
+
+    /* ======================================================================
+       CLINICAL REASONS — from the Rehab AI Exercise Database document
+       (Clinical Reason + Related Conditions, word for word).
+       'Doc name=DZ key' links a related condition to its simulation in DZ.
+       ==================================================================== */
+    G.CLIN = {
+        neck_flexion:               { reason: 'Improve restricted neck movement and movement tolerance.', related: ['Mechanical neck pain', 'Cervical stiffness=Neck stiffness', 'Post-immobilization stiffness=After a neck collar'] },
+        neck_rotation:              { reason: 'Improve restricted cervical rotation.', related: ['Mechanical neck pain', 'Cervical mobility deficits', 'Neck stiffness'] },
+        neck_lateral_flexion:       { reason: 'Improve restricted side-bending movement.', related: ['Mechanical neck pain', 'Cervical muscle tightness=Neck muscle tightness', 'Cervical mobility deficits'] },
+        shoulder_flexion:           { reason: 'Improve shoulder elevation and functional reaching.', related: ['Frozen shoulder', 'Rotator cuff-related shoulder pain=Rotator cuff pain', 'Postoperative shoulder stiffness (when permitted)=Stiffness after surgery'] },
+        shoulder_abduction:         { reason: 'Improve sideways shoulder elevation and movement control.', related: ['Frozen shoulder', 'Shoulder stiffness', 'Selected rotator cuff disorders=Rotator cuff pain'] },
+        shoulder_external_rotation: { reason: 'Improve external rotation mobility and, when appropriately resisted, rotator cuff strength.', related: ['Frozen shoulder', 'Shoulder stiffness', 'Selected rotator cuff-related conditions=Rotator cuff pain'] },
+        pendulum:                   { reason: 'Provide gentle shoulder movement with minimal active muscle effort.', related: ['Selected stages of frozen shoulder=Frozen shoulder (painful stage)', 'Postoperative shoulder rehabilitation=After shoulder surgery', 'Selected shoulder injuries=Shoulder injury'] },
+        assisted_shoulder_flexion:  { reason: 'Improve shoulder elevation while reducing the effort required from the affected arm.', related: ['Frozen shoulder', 'Postoperative stiffness (when cleared)=Stiffness after surgery', 'Shoulder mobility restrictions=Restricted flexion'] },
+        external_rotation_stick:    { reason: 'Improve restricted shoulder external rotation through assisted movement.', related: ['Frozen shoulder', 'Shoulder stiffness', 'Selected postoperative rehabilitation stages=After shoulder surgery'] },
+        finger_walk:                { reason: 'Gradually improve shoulder elevation and reaching ability.', related: ['Frozen shoulder', 'Shoulder stiffness', 'Selected rotator cuff-related conditions=Rotator cuff pain'] },
+        table_slide:                { reason: 'Practice assisted shoulder flexion with support from the table.', related: ['Frozen shoulder', 'Postoperative shoulder stiffness (when permitted)=Stiffness after surgery', 'Restricted shoulder flexion=Restricted flexion'] },
+        cross_body_stretch:         { reason: 'Improve horizontal shoulder movement when restricted.', related: ['Selected shoulder stiffness=Shoulder stiffness', 'Posterior shoulder tightness', 'Selected shoulder mobility deficits=Shoulder mobility deficits'] },
+        scapular_squeeze:           { reason: 'Improve scapular muscle control and shoulder-girdle coordination.', related: ['Postural-related shoulder discomfort=Posture-related shoulder pain', 'Selected rotator cuff-related conditions=Rotator cuff pain', 'Scapular movement deficits=Shoulder-blade control'] },
+        elbow_flexion:              { reason: 'Improve elbow range of motion and functional arm use.', related: ['Elbow stiffness after immobilization=Elbow stiffness', 'Selected elbow injuries after clearance=Elbow injury (cleared)', 'Postoperative elbow rehabilitation=After elbow surgery'] },
+        trunk_rotation:             { reason: 'Improve trunk rotational mobility and movement tolerance.', related: ['Thoracic stiffness=Upper-back stiffness', 'Selected mechanical back pain conditions=Mechanical back pain', 'Trunk mobility deficits=Trunk mobility loss'] },
+        hip_abduction:              { reason: 'Strengthen the hip abductors and improve pelvic control.', related: ['Hip abductor weakness', 'Hip osteoarthritis rehabilitation=Hip osteoarthritis', 'Selected gait and balance deficits=Gait & balance problems'] },
+        standing_march:             { reason: 'Practice hip flexion and controlled leg lifting.', related: ['Hip flexor weakness', 'Reduced foot clearance=Tripping / low foot clearance', 'Selected gait rehabilitation programs=Gait problems'] },
+        standing_knee_flexion:      { reason: 'Improve knee flexion movement and strengthen the knee flexors when appropriate.', related: ['Knee stiffness', 'Selected knee injury rehabilitation=Knee injury', 'Postoperative knee rehabilitation (when permitted)=After knee surgery'] },
+        forward_lunge:              { reason: 'Develop lower-limb strength, balance, and control during forward stepping.', related: ['Selected knee rehabilitation=Knee rehabilitation', 'Lower-limb weakness=Leg weakness', 'Functional mobility deficits=Daily mobility'] },
+        squat:                      { reason: 'Develop weight-bearing lower-limb strength and functional movement capacity.', related: ['Knee osteoarthritis rehabilitation=Knee osteoarthritis', 'Selected postoperative knee rehabilitation=After knee surgery (later)', 'Lower-limb deconditioning=Leg deconditioning'] },
+        heel_raise:                 { reason: 'Strengthen the calf muscles and improve ankle plantarflexion capacity.', related: ['Calf weakness', 'Selected ankle sprain rehabilitation=Ankle sprain', 'Achilles tendon rehabilitation (when prescribed)=Achilles rehabilitation', 'Gait deficits=Gait problems'] },
+        wrist_flexion:              { reason: 'Improve wrist mobility and functional hand positioning.', related: ['Wrist stiffness after immobilization=Wrist stiffness', 'Selected wrist injuries after clearance=Wrist injury (cleared)', 'Postoperative wrist rehabilitation=After wrist surgery'] },
+        finger_flexion:             { reason: 'Improve grip strength and hand function when strengthening is indicated.', related: ['Hand weakness after immobilization=Hand weakness after a cast', 'Selected hand injury rehabilitation=Hand injury', 'Reduced grip strength'] },
+        finger_spread:              { reason: 'Improve finger mobility, coordination, and hand opening.', related: ['Finger stiffness', 'Selected hand injury rehabilitation=Hand injury', 'Reduced finger mobility after immobilization=Finger stiffness'] }
+    };
+    /* Clinical considerations (same document) — shown when an exercise's related conditions match */
+    G.CONSIDER = [
+        { re: /frozen/i, t: 'Frozen shoulder', r: 'Prioritize comfortable, graded mobility exercises. Avoid forceful stretching during highly painful stages.' },
+        { re: /rotator cuff/i, t: 'Rotator cuff disorders', r: 'Select shoulder movements based on pain, strength, and the specific tendon or functional deficit.' },
+        { re: /osteoarthritis/i, t: 'Osteoarthritis', r: 'Adjust range, repetitions, and resistance according to symptoms and functional capacity.' },
+        { re: /postoperative/i, t: 'Postoperative rehabilitation', r: 'Follow the surgeon’s restrictions and the relevant postoperative protocol before recommending an exercise.' },
+        { re: /neck|cervical|back|thoracic|trunk/i, t: 'Neck or back conditions', r: 'Screen for neurological symptoms and diagnosis-specific movement restrictions.' },
+        { re: /gait|balance|foot clearance|functional mobility|lower-limb weakness/i, t: 'Balance and walking deficits', r: 'Provide stable support or supervision where necessary.' }
+    ];
+    G.CLIN_NOTE = 'A related disease does not automatically mean an exercise is suitable. Your physiotherapist uses your diagnosis, symptoms, movement assessment and restrictions to choose exercises. These exercises support rehabilitation but do not independently diagnose or treat a disease.';
+})(typeof window !== 'undefined' ? window : globalThis);
