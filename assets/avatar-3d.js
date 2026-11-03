@@ -523,12 +523,17 @@
    *  the curl, head turning on the neck axis, arms forward in the squat …)
    *  follows MotionRx; how FAR it moves is always ReMotion's `th`.
    * ==================================================================== */
+  const SIDE34 = 35;
   function mapAngles(exId, th, dir) {
     const p = Object.assign({}, RELAXED);
     let view = 'side', anchor = null, hipTilt = 0, iso = null, table = false, floor = false;
     const extra = {};
     switch (exId) {
       case 'neck_flexion':
+        /* v23: seen from the side but turned SIDE34° toward the front, so the
+           face shows (from the pure side her hair hid it) and the nod still
+           reads clearly against the marks */
+        view = 'side34';
         p.neckFlex = dir === 'extension' ? -th : th;
         anchor = { joint: 'neck', at: [100, 146], scale: 285 };
         break;
@@ -579,14 +584,16 @@
         break;
       }
       case 'wrist_flexion':
-        /* MotionRx forearm-supported set-up (elbow at the side, forearm
-           forward), palm turned up so flexion lifts the hand as in ReMotion */
-        /* rig values solved so the forearm lies level and the wrist hinge
-           faces the camera: the hand then turns by exactly th on screen */
-        Object.assign(p, { R_shFlex: 12, R_shAbd: 0, R_elFlex: 78, R_pron: -91, R_finCurl: 8 });
+        /* v24: the set-up the patient uses with a camera in front — elbow on
+           the table, forearm straight up, thumb toward the camera. Flexion
+           bends the hand toward the face (screen right), extension away from
+           it, both flat to the camera, so the bend is seen exactly as the
+           patient's camera sees it. Forearm and hand only. */
+        view = 'front';
+        Object.assign(p, { R_shFlex: 40, R_shAbd: 0, R_elFlex: 140, R_pron: 0, R_finCurl: 8 });
         p.R_wrFlex = dir === 'extension' ? -th : th;
-        anchor = { joint: 'R_hand', at: [118, 112], scale: 310 };
-        table = true;
+        anchor = { joint: 'R_hand', at: [100, 118], scale: 520 };
+        iso = 'R_forearm';
         break;
       case 'finger_flexion':
         /* hand up, palm to the camera; fingers and thumb close by MotionRx's
@@ -673,6 +680,23 @@
         Object.assign(p, both({ shFlex: 55, elFlex: 115, shRot: -55, shAbd: 12, finCurl: 45 }));
         anchor = { joint: 'spine', at: [100, 118], scale: 140 };
         break;
+      case 'lumbar_flexion': {
+        /* v35: standing, seen from the side (as the patient's side camera
+           sees it). The bend is shared by the lumbar spine and the pelvis
+           tipping over the hips (lumbo-pelvic rhythm); the legs stay
+           straight and the feet flat. Flexion: arms hang toward the floor.
+           Extension: hands support the lower back. */
+        const a = dir === 'extension' ? -th : th;
+        hipTilt = 0.4 * a;
+        p.trunkFlex = a - hipTilt;
+        p.neckFlex = dir === 'extension' ? 0.25 * th : -0.15 * th;
+        Object.assign(p, both({ hipFlex: hipTilt, knFlex: 0, ankPF: -hipTilt, hipAbd: 3 }));
+        if (dir === 'extension') Object.assign(p, both({ shFlex: -50, shAbd: 22, elFlex: 105, shRot: 25, pron: 0, finCurl: 10 }));
+        else Object.assign(p, both({ shFlex: a, shAbd: 5, elFlex: 8, finCurl: 15 }));   // hanging straight down
+        anchor = { joint: 'hips', at: [100, 112], scale: 88 };
+        floor = true;
+        break;
+      }
       case 'hip_abduction':
         view = 'front';
         Object.assign(p, { L_hipAbd: th, R_hipAbd: 2, R_shAbd: 24, R_elFlex: 18, R_finCurl: 55 });
@@ -728,6 +752,73 @@
   }
 
   /* ======================================================================
+   *  v23 — MIRROR ("You"): the figure copies the PATIENT, seen from where
+   *  the patient's camera is (in front for every exercise; behind for the
+   *  finger walk), as in the mirrored camera picture: the patient's left
+   *  is on the screen's left. It moves the limb the patient is moving, by
+   *  the patient's own measured angle.
+   *     view   the camera's view of the patient
+   *     one    the mapping moves both arms: keep only the patient's arm
+   *     mov    the rig side the mapping moves ('L' / 'R'), or 'dir' when it
+   *            follows the direction; swapped to the patient's side
+   *     frame  'full' whole body (soles at the bottom), 'upper' head to hips
+   * ==================================================================== */
+  const MIRROR = {
+    neck_flexion:               { view: 'front', anchor: { joint: 'neck', at: [100, 140], scale: 330 } },
+    shoulder_abduction:         { view: 'front', one: true, frame: 'upper' },
+    shoulder_flexion:           { view: 'front', one: true, frame: 'upper' },
+    elbow_flexion:              { view: 'front', one: true, frame: 'upper' },
+    squat:                      { view: 'front', frame: 'full' },
+    shoulder_external_rotation: { mov: 'L', one: true },
+    external_rotation_stick:    { mov: 'L' },
+    pendulum:                   { view: 'front', mov: 'R', frame: 'full' },
+    finger_walk:                { view: 'back', mov: 'R', frame: 'upper' },
+    table_slide:                { view: 'front', mov: 'R', frame: 'full' },
+    cross_body_stretch:         { mov: 'L' },
+    scapular_squeeze:           { view: 'front', frame: 'upper' },
+    lumbar_flexion:             { frame: 'full' },          /* v35: the camera is at her side */
+    hip_abduction:              { mov: 'L', frame: 'full' },
+    standing_march:             { view: 'front', mov: 'dir', frame: 'full' },
+    standing_knee_flexion:      { view: 'front', mov: 'dir', frame: 'full' },
+    forward_lunge:              { view: 'front', frame: 'full' },
+    heel_raise:                 { view: 'front', frame: 'full' }
+  };
+  const ARM_KEYS = ['shAbd', 'shFlex', 'shRot', 'elFlex', 'pron', 'wrFlex', 'finCurl', 'finSpread'];
+  const swapName = n => typeof n === 'string' ? n.replace(/^(L|R)_/, (x, c) => (c === 'L' ? 'R_' : 'L_')) : n;
+  function swapLR(m) {
+    const p = {};
+    Object.keys(m.pose).forEach(k => { p[swapName(k)] = m.pose[k]; });
+    m.pose = p;
+    if (m.yaw) { const y = {}; Object.keys(m.yaw).forEach(k => { y[swapName(k)] = -m.yaw[k]; }); m.yaw = y; }
+    if (m.anchor) m.anchor = Object.assign({}, m.anchor, { joint: swapName(m.anchor.joint), at: [200 - m.anchor.at[0], m.anchor.at[1]] });
+    if (m.props) { const q = {}; Object.keys(m.props).forEach(k => { q[k] = swapName(m.props[k]); }); m.props = q; }
+    if (m.iso) m.iso = swapName(m.iso);
+  }
+  function mirrorAngles(exId, th, dir, side) {
+    const m = mapAngles(exId, th, dir);
+    if (!m) return m;
+    const c = MIRROR[exId];
+    if (!c) return m;
+    if (c.view) m.view = c.view;
+    const sd = (side === 'left' || side === 'right') ? side : (c.mov === 'dir' ? dir : null);
+    const want = sd === 'left' ? 'R' : (sd === 'right' ? 'L' : null);   // patient's left = screen left = rig R
+    if (want && c.mov) {
+      const moving = c.mov === 'dir' ? (dir === 'left' ? 'L' : 'R') : c.mov;
+      if (moving !== want) swapLR(m);
+    }
+    if (want && c.one) {
+      /* the other arm stays where this exercise starts (angle 0) */
+      const o = want === 'L' ? 'R' : 'L';
+      const rest = mapAngles(exId, 0, dir).pose;
+      ARM_KEYS.forEach(k => { m.pose[o + '_' + k] = rest[o + '_' + k]; });
+    }
+    if (c.frame === 'upper') m.anchor = { joint: 'neck', at: [100, 60], scale: 118 };
+    if (c.anchor) m.anchor = c.anchor;
+    m.mirrorFull = c.frame === 'full';
+    return m;
+  }
+
+  /* ======================================================================
    *  STUDIO  (MotionRx lighting: soft-box environment + key, rim, fill)
    * ==================================================================== */
   let R = null;   // { renderer, scene, camera, av, key, ... }
@@ -767,16 +858,41 @@
     return av.ready();
   }
 
+  /* v36: computers / phones without graphics acceleration draw WebGL in
+     software (SwiftShader, llvmpipe, Microsoft Basic Render…). There every
+     soft shadow and every extra pixel costs the processor the camera
+     tracking needs, so the figure is drawn in a LITE way: no shadows, no
+     anti-aliasing, and fewer repaints (exercise-figures.js reads lite()). */
+  let LITE = null;
+  function detectLite() {
+    if (LITE !== null) return LITE;
+    LITE = false;
+    try {
+      if (/[?&]avatar=lite\b/.test(location.search)) return (LITE = true);
+      if (/[?&]avatar=full\b/.test(location.search)) return LITE;
+      const c = document.createElement('canvas');
+      const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+      if (!gl) return LITE;
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+      LITE = /swiftshader|llvmpipe|softpipe|software|basic render|mesa offscreen/i.test(name);
+      const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+    } catch (e) { /* keep the full look */ }
+    return LITE;
+  }
+
   function init() {
     if (R) return R;
+    const lite = detectLite();
     const canvas = document.createElement('canvas');
-    const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true, premultipliedAlpha: true, preserveDrawingBuffer: false });
+    const renderer = new T.WebGLRenderer({ canvas, antialias: !lite, alpha: true, premultipliedAlpha: true, preserveDrawingBuffer: false,
+                                           powerPreference: 'low-power' });
     renderer.setPixelRatio(1);
     renderer.outputEncoding = T.sRGBEncoding;
     renderer.toneMapping = T.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.86;
     renderer.physicallyCorrectLights = false;
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = !lite;
     renderer.shadowMap.type = T.PCFSoftShadowMap;
     renderer.setClearColor(0x000000, 0);
 
@@ -790,9 +906,13 @@
     panel(2, 4, -1, 3, -5, 5, [0.85, 0.92, 1]);          // rim
     panel(8, 8, 0, 3.4, 0, 0.9, [1, 1, 1]);              // ceiling bounce
     const floorBounce = new T.Mesh(new T.PlaneGeometry(12, 12), new T.MeshBasicMaterial({ color: new T.Color(0.45, 0.42, 0.4) })); floorBounce.rotation.x = -Math.PI / 2; floorBounce.position.y = -0.4; envScene.add(floorBounce);
-    scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+    /* v36: the soft-box environment is the costly part of the first paint
+       (seconds without graphics acceleration); the LITE look lights her with
+       a brighter sky/ground light instead */
+    if (!lite) scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+    else pmrem.dispose();
 
-    scene.add(new T.HemisphereLight(0xe4edf7, 0x40372f, 0.15));
+    scene.add(new T.HemisphereLight(0xe4edf7, 0x40372f, lite ? 0.95 : 0.15));
     const key = new T.DirectionalLight(0xfff1e2, 1.9); key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     Object.assign(key.shadow.camera, { left: -1.3, right: 1.3, top: 1.3, bottom: -1.3, near: 0.5, far: 12 });
@@ -881,10 +1001,13 @@
    * figure-space box [box.x, box.x + box.w] x [box.y, box.y + box.h].
    */
   function draw(target, exId, th, dir, box, opts) {
-    const m = mapAngles(exId, th, dir);
-    /* v19: opts.full = whole figure standing with the soles at opts.at (home page) */
-    const full = !!(opts && opts.full);
+    const mirror = !!(opts && opts.mirror);
+    const m = mirror ? mirrorAngles(exId, th, dir, opts.side) : mapAngles(exId, th, dir);
     if (!m) return false;
+    /* v19: opts.full = whole figure standing with the soles at opts.at (home page);
+       v23: the mirror frames lower-body exercises the same way */
+    if (mirror && m.mirrorFull) opts = Object.assign({}, opts, { full: true, at: [100, 192], scale: 90 });
+    const full = !!(opts && opts.full);
     init();
     const { renderer, scene, camera, av, key, rim, fill, floor, tableG } = R;
     const W = target.width, H = target.height;
@@ -917,6 +1040,8 @@
     }
     if (m.view === 'front') _dir.set(0, 0, 1);
     else if (m.view === 'frontUp') _dir.set(0, Math.sin(rad(30)), Math.cos(rad(30)));   // v18: front, camera raised 30°
+    else if (m.view === 'back') _dir.set(0, 0, -1);                                   // v23: camera behind (finger walk)
+    else if (m.view === 'side34') _dir.set(-Math.cos(rad(SIDE34)), 0, Math.sin(rad(SIDE34)));   // v23: side, turned toward the front
     else _dir.set(-1, 0, 0);
     camera.position.copy(A).addScaledVector(_dir, 10);
     camera.up.set(0, 1, 0);
@@ -952,6 +1077,16 @@
     renderer.setViewport(0, R.h - H, W, H);
     renderer.setScissor(0, R.h - H, W, H);
     renderer.clear();
+    /* v36: in the dark theme her black T-shirt and dark hair sank into the
+       dark card, so the light from behind (rim) is stronger and the picture a
+       little brighter — her outline stays clear */
+    const darkUI = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (R.darkUI !== darkUI) {
+      R.darkUI = darkUI;
+      rim.intensity = darkUI ? 2.6 : 1.1;
+      fill.intensity = darkUI ? 0.55 : 0.25;
+      renderer.toneMappingExposure = darkUI ? 1.0 : 0.86;
+    }
     renderer.render(scene, camera);
     const ctx = target.getContext('2d');
     ctx.clearRect(0, 0, W, H);
@@ -1023,6 +1158,20 @@
     }
   }
 
+  /* v36: WARM-UP. The first paint used to compile every shader and upload
+     every texture at once — on a computer without graphics acceleration a
+     single freeze of several seconds, and it came exactly when the patient
+     opened an exercise, so the camera, the tracking and the figure all
+     waited. Now it is done once, in the background, right after loading:
+     a few tiny paints that between them use every material (whole body
+     with the floor, the table, the props, the close-up hand). */
+  function warm() {
+    const c = document.createElement('canvas'); c.width = 48; c.height = 48;
+    const box = { x: -60, y: -60, w: 320, h: 320 };
+    ['squat', 'wrist_flexion', 'table_slide', 'finger_walk', 'external_rotation_stick', 'finger_flexion', 'neck_flexion']
+      .forEach(id => { try { draw(c, id, 10, null, box); } catch (e) { /* a missing prop must not stop the rest */ } });
+  }
+
   function supported() {
     try {
       const c = document.createElement('canvas');
@@ -1031,7 +1180,8 @@
   }
 
   root.ReMotionAvatar3D = {
-    init, ready, draw, supported, mapAngles, setCharacter,
+    init, ready, draw, supported, mapAngles, setCharacter, warm,
+    lite: () => detectLite(),
     character: () => current, characters: () => Object.keys(CHARS), modelGlobal: c => (CHARS[c] || CHARS.female).model,
     has: id => !!mapAngles(id, 0, null)
   };
